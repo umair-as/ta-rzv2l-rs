@@ -1,0 +1,27 @@
+# Rust
+target/
+**/*.rs.bk
+
+# TA build output
+*.ta
+*.elf
+*.dmp
+*.map
+ta.lds
+dyn_list
+
+# Session notes, handoffs, working material.
+# Never tracked: these hold board addresses, credentials and session detail.
+scratch/
+
+# Agent working files
+.claude/
+
+# python
+__pycache__/
+*.pyc
+
+# editors / OS
+.vscode/
+*.swp
+.DS_Store

@@ -1,0 +1,5 @@
+# Rust toolchain for the custom TAs. Rationale + verification in VERSIONS.md.
+[toolchain]
+channel = "stable"
+targets = ["aarch64-unknown-linux-gnu"]
+profile = "minimal"
