@@ -84,8 +84,12 @@ Design decisions that look odd but are deliberate:
   approving it.
 - **Public-repo hygiene**: no lab IPs, credentials, local absolute paths, or
   sibling-project paths in anything tracked.
-- **Commit trailers**: `Assisted-by: <tool>:<model-id>`, one line per model. Never
-  `Co-Authored-By:` for an AI. Never copy a model id from a doc or a past commit.
+- **Commit trailers**: `Assisted-by: <tool>:<model-id>`, one line per model in the order they
+  touched the change. Never `Co-Authored-By:` for an AI — it asserts authorship an AI can't hold
+  and duplicates what `Assisted-by:` records more precisely; drop the harness default line.
+  Never copy a model id from a doc or a past commit; state the model the session is running as.
+  Attribution is not certification — the operator stays the author and is responsible for review.
+  Apply to new commits only; never rewrite history to change trailers.
 - Check the mundane explanation first when hardware "disproves" something — a glob once
   expanded as the wrong user and looked like a broken experiment.
 
