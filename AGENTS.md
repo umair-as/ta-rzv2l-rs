@@ -1,9 +1,9 @@
 # Agent instructions — ta-rzv2l-rs
 
 Rust OP-TEE Trusted Applications for the Renesas RZ/V2L SMARC EVK, built and verified on real
-hardware. A personal learning project: success is what has been **demonstrated and
-understood**, not feature count. A limitation proven on hardware and written down plainly
-beats a feature that appears to work. Never write in a product/fleet register and never claim
+hardware. The scope is narrow and evidence-driven: success is what has been **demonstrated on
+hardware**, not feature count. A limitation proven on the board and written down plainly beats
+a feature that appears to work. Never write in a product/fleet register and never claim
 security properties the platform notes below don't support.
 
 Session context: if `scratch/` exists (gitignored, local only), read its newest handoff/

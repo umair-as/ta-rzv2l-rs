@@ -6,12 +6,9 @@
 
 Rust OP-TEE Trusted Applications for the Renesas RZ/V2L, built and verified on real hardware.
 
-A personal learning project. The goal is to understand how Trusted Applications are built and
-what a TEE does and does not provide. There is no product, no customer, and no fleet.
-
-Success is measured by what has been **demonstrated and understood**, not by feature count. A
-limitation proven on hardware and written down plainly is a better outcome than a feature that
-appears to work.
+The scope is deliberately narrow and evidence-driven: success is measured by what has been
+**demonstrated on hardware**, not by feature count. A limitation proven on the board and written
+down plainly is a better outcome than a feature that appears to work.
 
 ## The device signer
 
