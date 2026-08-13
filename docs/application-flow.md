@@ -6,9 +6,9 @@ application.
 
 ## The three environments
 
-![Two TrustZone worlds on the RZ/V2L, driven from a development computer: signer-client in the
-normal world invokes the signer TA in the secure world, whose key ciphertext is sealed back
-into normal-world storage.](diagrams/architecture.svg)
+![Runtime architecture across the development computer, Linux normal world and OP-TEE secure
+world. It shows the client request path, encrypted storage through tee-supplicant, and the
+currently demonstrated normal-world root access to TZDRAM.](diagrams/architecture.svg)
 
 The development computer is outside the TEE. It builds both board programs and runs the final
 signature verifier.
@@ -18,8 +18,10 @@ The board's **normal world**, also called the Rich Execution Environment (REE), 
 messenger between a command-line caller and OP-TEE.
 
 The board's **secure world** runs OP-TEE OS and the signer Trusted Application (TA). This is where
-the P-256 key is generated and where signing occurs. Private key material exists in plaintext
-only in TA memory; it is never returned by the TA interface.
+the P-256 key is generated and where signing occurs. The TA interface never returns private key
+material. On the current board image, however, the DDR firewall does not isolate OP-TEE's TZDRAM
+from normal-world root; that platform defect is shown in the diagram and detailed in
+[`security-model.md`](security-model.md).
 
 ## Why `signer/` contains three Rust crates
 
@@ -156,39 +158,34 @@ signer-client pubkey
 
 ### Signing a digest
 
-![Sequence of a sign request: the development host asks signer-client to sign a digest, the
-client opens a session and invokes the Sign command through OP-TEE, the TA loads its key and
-computes an ECDSA P-256 signature, and the client returns a JSON object the host verifies
-independently.](diagrams/sign-sequence.svg)
+![A 32-byte digest crosses the TrustZone boundary into the signer TA; the TA signs it with its
+in-TEE private key and returns a 64-byte signature. The private key itself has no path back
+across the boundary — the interface offers no command that returns it.](diagrams/sign-flow.svg)
 
-The client parses exactly 32 bytes, invokes `Sign`, and also fetches the public key so it can
-print one self-contained JSON object. The TA signs a caller-supplied SHA-256 **digest** — it
-does not hash an arbitrary message. `r` and `s` are each 32-byte, big-endian integers, so the
-raw signature is 64 bytes rather than ASN.1 DER, and the private key never returns to the
-normal world.
+The shape of the operation is the point: the digest crosses in and the signature crosses out,
+but the private key never does. The transport underneath each crossing — `libteec`, the Linux
+OP-TEE driver, the secure monitor call, OP-TEE OS — is collapsed here; at the application level
+it is one session carrying the `Sign` command (the client also issues `GetPubkey` in the same
+session, covered above).
+
+The client parses exactly 32 bytes and invokes `Sign`. The TA signs a caller-supplied SHA-256
+**digest** — it does not hash an arbitrary message. `r` and `s` are each 32-byte, big-endian
+integers, so the raw signature is 64 bytes rather than ASN.1 DER. "No path out" describes the
+*interface*: the separate TZDRAM-isolation defect, by which local root can read secure memory
+directly, is described in the security model.
 
 ## Build and deploy flow
 
-The root Makefile delegates to separate Makefiles for the client and TA:
+The normal loop is deliberately small:
 
-```text
-make
-  -> signer/host: cargo build for aarch64 + strip
-  -> signer/ta:   cargo build for aarch64 + strip + sign TA
-
-make deploy
-  -> copy signer-client and <uuid>.ta to the board
-  -> install the client in /usr/local/bin/
-  -> install the TA in /lib/optee_armtz/
-
-make test
-  -> drive signer-client and ta-probe over SSH
-  -> verify returned signatures on the development computer
-
-make lint
-  -> cargo fmt --check + clippy; the TA crate additionally forbids
-     unwrap/expect/panic (secure-world code returns errors)
-```
+1. `make lint` checks formatting and clippy; the TA additionally forbids `unwrap`, `expect` and
+   `panic`.
+2. `make` cross-builds and strips `signer-client` and `ta-probe`, then cross-builds, strips and
+   signs `<uuid>.ta`.
+3. `make deploy` copies the three artifacts to the board. The REE tools go under
+   `/usr/local/bin/`; the TA goes under `/lib/optee_armtz/`.
+4. `make test` drives the board over SSH and verifies signatures on the development computer.
+   Add `REBOOT=1` to include the persistence check.
 
 Machine-specific paths and the board address belong in the untracked `local.mk`. The TA dev kit
 must come from the same OP-TEE build that runs on the board; a TA built against an unrelated kit
@@ -255,7 +252,7 @@ Consequences:
 - restoring an older valid storage snapshot can roll state backward; and
 - reboot persistence demonstrates durability, not rollback resistance.
 
-The signer is therefore a concrete demonstration of TEE key isolation and signing, with the
-storage limitations of this exact RZ/V2L platform stated explicitly. It is not presented as a
+The signer is therefore a concrete demonstration of TEE-resident key generation, persistence and
+signing, plus the interface discipline that keeps private material out of command responses. It
+is not evidence of hardware-enforced key isolation on this board and is not presented as a
 production device-identity system.
-

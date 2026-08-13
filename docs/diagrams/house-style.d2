@@ -50,7 +50,7 @@ classes: {
     style: {
       stroke: "#7b8794"
       stroke-width: 2
-      fill: transparent
+      fill: "#ffffff"
       font-color: "#4a5563"
       border-radius: 6
       stroke-dash: 3
@@ -154,6 +154,16 @@ classes: {
       stroke: "#a3402f"
       stroke-width: 2
       stroke-dash: 3
+      font-color: "#6d2a1f"
+    }
+  }
+
+  # A demonstrated security-boundary violation. Unlike `blocked`, this path
+  # succeeds and therefore uses a solid warning stroke.
+  exposed: {
+    style: {
+      stroke: "#a3402f"
+      stroke-width: 3
       font-color: "#6d2a1f"
     }
   }

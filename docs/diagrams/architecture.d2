@@ -1,34 +1,44 @@
 ...@house-style
-direction: right
+direction: down
 
-# Two TrustZone worlds on one board, driven from a third machine. The focus is
-# the signer TA: the only place the private key exists in plaintext. The key's
-# ciphertext at rest lives in the normal world (store), which is why this board
-# offers confidentiality but not isolation against local root — see
-# docs/security-model.md.
+# Runtime components and trust boundaries. This deliberately shows the
+# current platform defect: the logical Secure World boundary exists, but the
+# DDR firewall does not prevent normal-world root from reading TZDRAM.
 
-dev: Development computer {class: external}
+dev: Development computer\nbuild · deploy · verify {
+  class: external
+}
 
 board: RZ/V2L board {
   class: boundary
   direction: right
+  grid-columns: 2
 
-  normal: Normal world (Linux / REE) {
+  normal: Normal world · Linux / REE {
     class: boundary
     direction: down
-    client: signer-client {class: box}
-    store: |md
-      /var/lib/tee
-      encrypted key blob
-    | {class: store}
+    grid-columns: 1
+
+    client: signer-client\nGetPubkey · Sign {class: box}
+    root: root + /dev/mem\nOP-TEE code read succeeds {class: untrusted}
+    supplicant: tee-supplicant\nstorage RPC {class: box}
+    store: /var/lib/tee\nencrypted key blob {class: store}
+
+    supplicant -> store: {class: aside}
   }
 
-  secure: Secure world (OP-TEE) {
+  secure: Secure world · OP-TEE {
     class: boundary
-    ta: signer TA {class: focus}
+    direction: down
+
+    core: OP-TEE OS {class: trusted}
+    ta: signer TA\nkey in TA memory while used {class: focus}
+
+    core -> ta: dispatch {class: flow}
   }
 }
 
-dev -> board.normal.client: deploy + drive over ssh {class: flow}
-board.normal.client -> board.secure.ta: invoke — pubkey + signature return {class: flow}
-board.secure.ta -> board.normal.store: seal key via tee-supplicant {class: flow}
+dev <-> board.normal.client: CLI · JSON {class: flow}
+board.normal.client <-> board.secure.core: {class: flow}
+board.normal.supplicant <-> board.secure.core: {class: aside}
+board.normal.root -> board.secure.core: {class: exposed}

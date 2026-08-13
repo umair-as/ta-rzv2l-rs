@@ -36,7 +36,9 @@ fail for the expected reason, so a green run means something.
 How the pieces fit together — the two TrustZone worlds, the crates, the key lifecycle, the
 build and test flow — is explained in [`docs/application-flow.md`](docs/application-flow.md).
 What the signer protects against, per attacker tier, and what it deliberately does not claim,
-is in [`docs/security-model.md`](docs/security-model.md).
+is in [`docs/security-model.md`](docs/security-model.md). How to watch it run on the board —
+and what each tracing tool can and cannot see across the TrustZone boundary — is in
+[`docs/observing-the-ta.md`](docs/observing-the-ta.md).
 
 ## Toolchain and platform pins
 
@@ -95,6 +97,13 @@ builds for the crates that don't require the board's dev kit, and a self-test of
 green is not acceptance — the board test is.
 
 ## Platform notes that shape the design
+
+**OP-TEE's TZDRAM is not isolated from normal-world root on the current board image.** Three
+read-only `devmem2` probes at the OP-TEE TZDRAM base returned OP-TEE instructions instead of a
+bus fault. TF-A initializes TZC-400 but, with `TRUSTED_BOARD_BOOT=0`, does not add the secure-only
+DDR regions. Consequently, “never exported” describes the TA command interface; this project
+does not claim private-key confidentiality against local root. The exact addresses, control test
+and scope of that conclusion are recorded in [`docs/security-model.md`](docs/security-model.md).
 
 **Secure storage on this board provides confidentiality and integrity, but not freshness.**
 With `CFG_RPMB_FS=n`, normal-world root can delete or roll back `/var/lib/tee`. Proven on

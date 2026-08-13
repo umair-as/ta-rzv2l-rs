@@ -1,11 +1,12 @@
-optee-ta-rzv2l
-Copyright 2026 The optee-ta-rzv2l authors
+ta-rzv2l-rs
+Copyright 2026 The ta-rzv2l-rs authors
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 This product vendors, under third_party/teaclave-trustzone-sdk/, portions of the
 Apache Teaclave TrustZone SDK
-(https://github.com/apache/incubator-teaclave-trustzone-sdk) at revision
-ec3eefd9, developed at The Apache Software Foundation (https://www.apache.org/)
-and licensed under Apache-2.0. See third_party/teaclave-trustzone-sdk/NOTICE and
-LICENSE for that code's required notices.
+(https://github.com/apache/teaclave-trustzone-sdk) at tag v0.7.0, revision
+236d79dabc61bcf1925823c2928126031ff45f45, developed at The Apache Software
+Foundation (https://www.apache.org/) and licensed under Apache-2.0. See
+third_party/teaclave-trustzone-sdk/NOTICE and LICENSE for that code's required
+notices.
