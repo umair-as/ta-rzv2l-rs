@@ -98,12 +98,14 @@ green is not acceptance — the board test is.
 
 ## Platform notes that shape the design
 
-**OP-TEE's TZDRAM is not isolated from normal-world root on the current board image.** Three
-read-only `devmem2` probes at the OP-TEE TZDRAM base returned OP-TEE instructions instead of a
-bus fault. TF-A initializes TZC-400 but, with `TRUSTED_BOARD_BOOT=0`, does not add the secure-only
-DDR regions. Consequently, “never exported” describes the TA command interface; this project
-does not claim private-key confidentiality against local root. The exact addresses, control test
-and scope of that conclusion are recorded in [`docs/security-model.md`](docs/security-model.md).
+**Secure DRAM is readable by normal-world root, because this board runs without secure boot.**
+It is a development board in an open lifecycle state (OTP unburned, secure boot not
+provisioned — a deliberate choice on a single board), and in that state the firmware leaves the
+DDR firewall permissive rather than fencing OP-TEE's secure memory. Confirmed on hardware with
+read-only probes. Consequently, “never exported” describes the TA command *interface*; this
+project does not claim private-key confidentiality against local root. This is a property of the
+board's provisioning, not a flaw in OP-TEE or the platform. See
+[`docs/security-model.md`](docs/security-model.md).
 
 **Secure storage on this board provides confidentiality and integrity, but not freshness.**
 With `CFG_RPMB_FS=n`, normal-world root can delete or roll back `/var/lib/tee`. Proven on

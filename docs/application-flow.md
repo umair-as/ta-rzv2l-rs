@@ -19,9 +19,9 @@ messenger between a command-line caller and OP-TEE.
 
 The board's **secure world** runs OP-TEE OS and the signer Trusted Application (TA). This is where
 the P-256 key is generated and where signing occurs. The TA interface never returns private key
-material. On the current board image, however, the DDR firewall does not isolate OP-TEE's TZDRAM
-from normal-world root; that platform defect is shown in the diagram and detailed in
-[`security-model.md`](security-model.md).
+material. On this board, however — which runs without secure boot provisioned — the DDR firewall
+is left permissive, so normal-world root can read OP-TEE's secure memory directly; that is
+shown in the diagram and detailed in [`security-model.md`](security-model.md).
 
 ## Why `signer/` contains three Rust crates
 
@@ -171,8 +171,8 @@ session, covered above).
 The client parses exactly 32 bytes and invokes `Sign`. The TA signs a caller-supplied SHA-256
 **digest** — it does not hash an arbitrary message. `r` and `s` are each 32-byte, big-endian
 integers, so the raw signature is 64 bytes rather than ASN.1 DER. "No path out" describes the
-*interface*: the separate TZDRAM-isolation defect, by which local root can read secure memory
-directly, is described in the security model.
+*interface*: on this board, which runs without secure boot, local root can still read secure
+memory directly — a separate matter described in the security model.
 
 ## Build and deploy flow
 

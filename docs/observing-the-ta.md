@@ -8,8 +8,8 @@ signal, not reading the log.
 ## Three vantage points
 
 A TA runs in the secure world, whose *execution* a normal-world tracer cannot follow. (That is
-a tracing limit, not a memory-isolation guarantee — on this board's current image normal-world
-root can still read secure DRAM directly, a separate defect covered in
+a tracing limit, not a memory-isolation guarantee — on this board, which runs without secure
+boot, normal-world root can still read secure DRAM directly, a separate matter covered in
 [`security-model.md`](security-model.md).) So no single tool shows everything; each sits at a
 different boundary.
 
