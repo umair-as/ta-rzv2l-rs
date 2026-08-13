@@ -17,14 +17,18 @@
 
 [package]
 name = "optee-utee-sys"
-version = "0.2.0"
+version = "0.6.0"
 authors = ["Teaclave Contributors <dev@teaclave.apache.org>"]
 license = "Apache-2.0"
-repository = "https://github.com/apache/incubator-teaclave-trustzone-sdk.git"
+repository = "https://github.com/apache/teaclave-trustzone-sdk.git"
 description = "Native bindings to the libutee library."
 edition = "2018"
 links = "utee"
 
+[dependencies]
+libc = "0.2"
+
 [features]
-default = ["std"]
+default = []
 std = []
+no_link = []

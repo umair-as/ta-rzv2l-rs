@@ -15,9 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#[cfg(feature = "std")]
-use std::os::raw::*;
-#[cfg(not(feature = "std"))]
 use core::ffi::*;
 
 extern "C" {

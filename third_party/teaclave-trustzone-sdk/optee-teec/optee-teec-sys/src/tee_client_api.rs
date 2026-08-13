@@ -19,7 +19,7 @@ use libc::*;
 
 pub fn TEEC_PARAM_TYPES(p0:u32, p1:u32, p2:u32, p3:u32) -> u32 {
     let tmp = p1 << 4 | p2 << 8 | p3 << 12;
-    return p0 | tmp;
+    p0 | tmp
 }
 
 pub const TEEC_CONFIG_PAYLOAD_REF_COUNT: u32 = 4;
@@ -74,13 +74,19 @@ pub const TEEC_LOGIN_APPLICATION: u32       = 0x00000004;
 pub const TEEC_LOGIN_USER_APPLICATION: u32  = 0x00000005;
 pub const TEEC_LOGIN_GROUP_APPLICATION: u32 = 0x00000006;
 
+#[allow(non_camel_case_types)]
 pub type TEEC_Result = u32;
 
 #[repr(C)]
-pub struct TEEC_Context {
+pub struct TEEC_Context__Imp {
     pub fd: c_int,
     pub reg_mem: bool,
     pub memref_null: bool,
+}
+
+#[repr(C)]
+pub struct TEEC_Context {
+    pub imp: TEEC_Context__Imp,
 }
 
 #[repr(C)]
@@ -92,15 +98,23 @@ pub struct TEEC_UUID {
 }
 
 #[repr(C)]
-pub struct TEEC_Session {
+pub struct TEEC_Session__Imp {
     pub ctx: *mut TEEC_Context,
     pub session_id: u32,
 }
 
 #[repr(C)]
-pub union SharedMemoryFlagsCompat {
-    dummy: bool,
-    flags: u8,
+pub struct TEEC_Session {
+    pub imp: TEEC_Session__Imp,
+}
+
+#[repr(C)]
+pub struct TEEC_SharedMemory__Imp {
+    pub id: c_int,
+    pub alloced_size: size_t,
+    pub shadow_buffer: *mut c_void,
+    pub registered_fd: c_int,
+    pub flags: u32,
 }
 
 #[repr(C)]
@@ -108,11 +122,7 @@ pub struct TEEC_SharedMemory {
     pub buffer: *mut c_void,
     pub size: size_t,
     pub flags: u32,
-    pub id: c_int,
-    pub alloced_size: size_t,
-    pub shadow_buffer: *mut c_void,
-    pub registered_fd: c_int,
-    pub internal: SharedMemoryFlagsCompat,
+    pub imp: TEEC_SharedMemory__Imp,
 }
 
 #[derive(Copy, Clone)]
@@ -146,11 +156,16 @@ pub union TEEC_Parameter {
 }
 
 #[repr(C)]
+pub struct TEEC_Operation__Imp {
+    pub session: *mut TEEC_Session,
+}
+
+#[repr(C)]
 pub struct TEEC_Operation {
     pub started: u32,
     pub paramTypes: u32,
     pub params: [TEEC_Parameter; TEEC_CONFIG_PAYLOAD_REF_COUNT as usize],
-    pub session: *mut TEEC_Session,
+    pub imp: TEEC_Operation__Imp,
 }
 
 extern "C" {

@@ -15,12 +15,42 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::env;
-use std::path::Path;
+use std::env::{self, VarError};
+use std::path::PathBuf;
 
-fn main() {
-    let optee_client_dir = env::var("OPTEE_CLIENT_EXPORT").unwrap_or("../optee_client/out/export".to_string());
-    let search_path = Path::new(&optee_client_dir).join("usr/lib");
-    println!("cargo:rustc-link-search={}", search_path.display());
+fn main() -> Result<(), VarError> {
+    if !is_feature_enable("no_link")? {
+        link();
+    }
+    Ok(())
+}
+
+// Check if feature enabled.
+// Refer to: https://doc.rust-lang.org/cargo/reference/features.html#build-scripts
+fn is_feature_enable(feature: &str) -> Result<bool, VarError> {
+    let feature_env = format!("CARGO_FEATURE_{}", feature.to_uppercase().replace("-", "_"));
+
+    match env::var(feature_env) {
+        Err(VarError::NotPresent) => Ok(false),
+        Ok(_) => Ok(true),
+        Err(err) => Err(err),
+    }
+}
+
+fn link() {
+    const ENV_OPTEE_CLIENT_EXPORT: &str = "OPTEE_CLIENT_EXPORT";
+    println!("cargo:rerun-if-env-changed={}", ENV_OPTEE_CLIENT_EXPORT);
+
+    let optee_client_dir =
+        env::var(ENV_OPTEE_CLIENT_EXPORT).expect("OPTEE_CLIENT_EXPORT is not set");
+    let library_path = PathBuf::from(optee_client_dir).join("usr/lib");
+    if !library_path.exists() {
+        panic!(
+            "OPTEE_CLIENT_EXPORT usr/lib path {} does not exist",
+            library_path.display()
+        );
+    }
+
+    println!("cargo:rustc-link-search={}", library_path.display());
     println!("cargo:rustc-link-lib=dylib=teec");
 }

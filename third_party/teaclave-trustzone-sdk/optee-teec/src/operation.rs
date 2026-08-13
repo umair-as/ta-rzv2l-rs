@@ -15,16 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::{Param, ParamTypes};
-use optee_teec_sys as raw;
-use std::marker::PhantomData;
-use std::mem;
+use crate::{raw, Param, ParamTypes};
+use std::{marker::PhantomData, mem};
 
 /// This type defines the payload of either an open session operation or an
 /// invoke command operation. It is also used for cancellation of operations,
 /// which may be desirable even if no payload is passed.
 pub struct Operation<A, B, C, D> {
-    pub raw: raw::TEEC_Operation,
+    raw: raw::TEEC_Operation,
     phantom0: PhantomData<A>,
     phantom1: PhantomData<B>,
     phantom2: PhantomData<C>,
@@ -42,7 +40,7 @@ impl<A: Param, B: Param, C: Param, D: Param> Operation<A, B, C, D> {
             p3.param_type(),
         )
         .into();
-        raw_op.params = [p0.into_raw(), p1.into_raw(), p2.into_raw(), p3.into_raw()];
+        raw_op.params = [p0.to_raw(), p1.to_raw(), p2.to_raw(), p3.to_raw()];
         Operation {
             raw: raw_op,
             phantom0: PhantomData,
@@ -52,7 +50,7 @@ impl<A: Param, B: Param, C: Param, D: Param> Operation<A, B, C, D> {
         }
     }
 
-    pub fn as_mut_raw_ptr(&mut self) -> *mut raw::TEEC_Operation {
+    pub(crate) fn as_mut_raw_ptr(&mut self) -> *mut raw::TEEC_Operation {
         &mut self.raw
     }
 

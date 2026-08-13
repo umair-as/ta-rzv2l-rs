@@ -15,12 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::raw;
+use crate::{ErrorKind, Result};
 use core::fmt;
-use hex;
-use optee_teec_sys as raw;
 use uuid as uuid_crate;
-use uuid_crate::parser::ParseError;
-use uuid_crate::BytesError;
 
 /// A Universally Unique Resource Identifier (UUID) type as defined in RFC4122.
 /// The value is used to identify a trusted application.
@@ -34,10 +32,14 @@ impl Uuid {
     /// # Examples
     ///
     /// ```
-    /// let uuid = Uuid::parse_str("8abcf200-2450-11e4-abe2-0002a5d5c51b").unwrap();
+    /// # use optee_teec::Uuid;
+    /// # fn main() -> optee_teec::Result<()> {
+    /// let uuid = Uuid::parse_str("8abcf200-2450-11e4-abe2-0002a5d5c51b")?;
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn parse_str(input: &str) -> Result<Uuid, ParseError> {
-        let uuid = uuid_crate::Uuid::parse_str(input)?;
+    pub fn parse_str(input: &str) -> Result<Uuid> {
+        let uuid = uuid_crate::Uuid::parse_str(input).map_err(|_| ErrorKind::BadFormat)?;
         let (time_low, time_mid, time_hi_and_version, clock_seq_and_node) = uuid.as_fields();
         Ok(Self::new_raw(
             time_low,
@@ -52,6 +54,7 @@ impl Uuid {
     /// # Examples
     ///
     /// ```
+    /// # use optee_teec::Uuid;
     /// let bytes: [u8; 16] = [70, 235, 208, 238, 14, 109, 67, 201, 185, 13, 204, 195, 90, 145, 63, 62,];
     /// let uuid = Uuid::from_bytes(bytes);
     /// ```
@@ -66,11 +69,15 @@ impl Uuid {
     /// # Examples
     ///
     /// ```
+    /// # use optee_teec::Uuid;
+    /// # fn main() -> optee_teec::Result<()> {
     /// let bytes: &[u8; 16] = &[70, 235, 208, 238, 14, 109, 67, 201, 185, 13, 204, 195, 90, 145, 63, 62,];
-    /// let uuid = Uuid::from_slice(bytes);
+    /// let uuid = Uuid::from_slice(bytes)?;
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn from_slice(b: &[u8]) -> Result<Uuid, BytesError> {
-        let uuid = uuid_crate::Uuid::from_slice(b)?;
+    pub fn from_slice(b: &[u8]) -> Result<Uuid> {
+        let uuid = uuid_crate::Uuid::from_slice(b).map_err(|_| ErrorKind::BadFormat)?;
         let (time_low, time_mid, time_hi_and_version, clock_seq_and_node) = uuid.as_fields();
         Ok(Self::new_raw(
             time_low,
@@ -102,15 +109,47 @@ impl Uuid {
     }
 }
 
+impl Clone for Uuid {
+    fn clone(&self) -> Self {
+        Self::new_raw(
+            self.raw.timeLow,
+            self.raw.timeMid,
+            self.raw.timeHiAndVersion,
+            self.raw.clockSeqAndNode,
+        )
+    }
+}
+
 impl fmt::Display for Uuid {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:x}-{:x}-{:x}-{}",
+            "{:08x}-{:04x}-{:04x}-{}-{}",
             self.raw.timeLow,
             self.raw.timeMid,
             self.raw.timeHiAndVersion,
-            hex::encode(self.raw.clockSeqAndNode)
+            hex::encode(&self.raw.clockSeqAndNode[0..2]),
+            hex::encode(&self.raw.clockSeqAndNode[2..8]),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Uuid;
+
+    #[test]
+    fn test_to_string() {
+        let uuids = [
+            "00173366-2aca-49bc-beb7-10c975e6131e", // uuid with timeLow leading zeros
+            "11173366-0aca-49bc-beb7-10c975e6131e", // uuid with timeMid leading zeros
+            "11173366-2aca-09bc-beb7-10c975e6131e", // uuid with timeHiAndVersion leading zeros
+            "11173366-2aca-19bc-beb7-10c975e6131e", // random uuid
+        ];
+        for origin in uuids.iter() {
+            let uuid = Uuid::parse_str(origin).expect("Test UUID should be valid");
+            let formatted = uuid.to_string();
+            assert_eq!(*origin, formatted);
+        }
     }
 }

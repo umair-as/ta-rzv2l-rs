@@ -17,19 +17,24 @@
 
 [package]
 name = "optee-teec"
-version = "0.2.0"
+version = "0.6.0"
 authors = ["Teaclave Contributors <dev@teaclave.apache.org>"]
 license = "Apache-2.0"
-repository = "https://github.com/apache/incubator-teaclave-trustzone-sdk.git"
+repository = "https://github.com/apache/teaclave-trustzone-sdk.git"
 description = "TEE client API."
 edition = "2018"
 
 [dependencies]
-optee-teec-sys = { path = "optee-teec-sys" }
-optee-teec-macros = { path = "macros" }
-libc = "0.2"
+optee-teec-sys = { version = "0.6.0", path = "optee-teec-sys" }
+optee-teec-macros = { version = "0.6.0", path = "macros" }
 uuid = "0.7"
 hex = "0.3"
+num_enum = { version = "0.7.3", default-features = false }
+
+[dev-dependencies]
+# disable linking when running unit tests
+optee-teec-sys = { version = "0.6.0", path = "optee-teec-sys", features = ["no_link"] }
 
 [workspace]
+resolver = "2"
 members = ['systest']

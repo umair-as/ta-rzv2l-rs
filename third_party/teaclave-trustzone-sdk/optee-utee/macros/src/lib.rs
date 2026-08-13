@@ -40,10 +40,7 @@ pub fn ta_create(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     // check the function signature
     let valid_signature = f.constness.is_none()
-        && match f.vis {
-            syn::Visibility::Inherited => true,
-            _ => false,
-        }
+        && matches!(f.vis, syn::Visibility::Inherited)
         && f.abi.is_none()
         && f.decl.inputs.is_empty()
         && f.decl.generics.where_clause.is_none()
@@ -87,18 +84,12 @@ pub fn ta_destroy(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     // check the function signature
     let valid_signature = f.constness.is_none()
-        && match f.vis {
-            syn::Visibility::Inherited => true,
-            _ => false,
-        }
+        && matches!(f.vis, syn::Visibility::Inherited)
         && f.abi.is_none()
         && f.decl.inputs.is_empty()
         && f.decl.generics.where_clause.is_none()
         && f.decl.variadic.is_none()
-        && match f.decl.output {
-            syn::ReturnType::Default => true,
-            _ => false,
-        };
+        && matches!(f.decl.output, syn::ReturnType::Default);
 
     if !valid_signature {
         return syn::parse::Error::new(
@@ -141,10 +132,7 @@ pub fn ta_open_session(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     // check the function signature
     let valid_signature = f.constness.is_none()
-        && match f.vis {
-            syn::Visibility::Inherited => true,
-            _ => false,
-        }
+        && matches!(f.vis, syn::Visibility::Inherited)
         && f.abi.is_none()
         && (f.decl.inputs.len() == 1 || f.decl.inputs.len() == 2)
         && f.decl.generics.where_clause.is_none()
@@ -184,18 +172,20 @@ pub fn ta_open_session(_args: TokenStream, input: TokenStream) -> TokenStream {
                 .inputs
                 .iter()
                 .map(|arg| match arg {
-                    &syn::FnArg::Captured(ref val) => &val.ty,
+                    syn::FnArg::Captured(val) => &val.ty,
                     _ => unreachable!(),
                 })
                 .collect();
             let ctx_type = match input_types.last().unwrap() {
-                &syn::Type::Reference(ref r) => &r.elem,
+                syn::Type::Reference(r) => &r.elem,
                 _ => unreachable!(),
             };
 
             quote!(
+                // To eliminate the clippy error: this public function might dereference a raw pointer but is not marked `unsafe`
+                // we just expand the unsafe block, but the session-related macros need refactoring in the future
                 #[no_mangle]
-                pub extern "C" fn TA_OpenSessionEntryPoint(
+                pub unsafe extern "C" fn TA_OpenSessionEntryPoint(
                     param_types: u32,
                     params: &mut [optee_utee_sys::TEE_Param; 4],
                     sess_ctx: *mut *mut c_void,
@@ -205,7 +195,7 @@ pub fn ta_open_session(_args: TokenStream, input: TokenStream) -> TokenStream {
                     match #ident(&mut parameters, &mut ctx) {
                         Ok(_) =>
                         {
-                            unsafe { *sess_ctx = Box::into_raw(Box::new(ctx)) as _; }
+                            *sess_ctx = Box::into_raw(Box::new(ctx)) as _;
                             optee_utee_sys::TEE_SUCCESS
                         }
                         Err(e) => e.raw_code()
@@ -239,18 +229,12 @@ pub fn ta_close_session(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     // check the function signature
     let valid_signature = f.constness.is_none()
-        && match f.vis {
-            syn::Visibility::Inherited => true,
-            _ => false,
-        }
+        && matches!(f.vis, syn::Visibility::Inherited)
         && f.abi.is_none()
-        && (f.decl.inputs.len() == 0 || f.decl.inputs.len() == 1)
+        && (f.decl.inputs.is_empty() || f.decl.inputs.len() == 1)
         && f.decl.generics.where_clause.is_none()
         && f.decl.variadic.is_none()
-        && match f.decl.output {
-            syn::ReturnType::Default => true,
-            _ => false,
-        };
+        && matches!(f.decl.output, syn::ReturnType::Default);
 
     if !valid_signature {
         return syn::parse::Error::new(
@@ -277,22 +261,24 @@ pub fn ta_close_session(_args: TokenStream, input: TokenStream) -> TokenStream {
                 .inputs
                 .iter()
                 .map(|arg| match arg {
-                    &syn::FnArg::Captured(ref val) => &val.ty,
+                    syn::FnArg::Captured(val) => &val.ty,
                     _ => unreachable!(),
                 })
                 .collect();
             let t = match input_types.first().unwrap() {
-                &syn::Type::Reference(ref r) => &r.elem,
+                syn::Type::Reference(r) => &r.elem,
                 _ => unreachable!(),
             };
 
             quote!(
+                // To eliminate the clippy error: this public function might dereference a raw pointer but is not marked `unsafe`
+                // we just expand the unsafe block, but the session-related macros need refactoring in the future
                 #[no_mangle]
-                pub extern "C" fn TA_CloseSessionEntryPoint(sess_ctx: *mut c_void) {
+                pub unsafe extern "C" fn TA_CloseSessionEntryPoint(sess_ctx: *mut c_void) {
                     if sess_ctx.is_null() {
                         panic!("sess_ctx is null");
                     }
-                    let mut b = unsafe {Box::from_raw(sess_ctx as *mut #t)};
+                    let mut b = Box::from_raw(sess_ctx as *mut #t);
                     #ident(&mut b);
                     drop(b);
                 }
@@ -324,10 +310,7 @@ pub fn ta_invoke_command(_args: TokenStream, input: TokenStream) -> TokenStream 
 
     // check the function signature
     let valid_signature = f.constness.is_none()
-        && match f.vis {
-            syn::Visibility::Inherited => true,
-            _ => false,
-        }
+        && matches!(f.vis, syn::Visibility::Inherited)
         && f.abi.is_none()
         && (f.decl.inputs.len() == 2 || f.decl.inputs.len() == 3)
         && f.decl.generics.where_clause.is_none()
@@ -369,18 +352,20 @@ pub fn ta_invoke_command(_args: TokenStream, input: TokenStream) -> TokenStream 
                 .inputs
                 .iter()
                 .map(|arg| match arg {
-                    &syn::FnArg::Captured(ref val) => &val.ty,
+                    syn::FnArg::Captured(val) => &val.ty,
                     _ => unreachable!(),
                 })
                 .collect();
             let t = match input_types.first().unwrap() {
-                &syn::Type::Reference(ref r) => &r.elem,
+                syn::Type::Reference(r) => &r.elem,
                 _ => unreachable!(),
             };
 
             quote!(
+                // To eliminate the clippy error: this public function might dereference a raw pointer but is not marked `unsafe`
+                // we just expand the unsafe block, but the session-related macros need refactoring in the future
                 #[no_mangle]
-                pub extern "C" fn TA_InvokeCommandEntryPoint(
+                pub unsafe extern "C" fn TA_InvokeCommandEntryPoint(
                     sess_ctx: *mut c_void,
                     cmd_id: u32,
                     param_types: u32,
@@ -390,13 +375,16 @@ pub fn ta_invoke_command(_args: TokenStream, input: TokenStream) -> TokenStream 
                         return optee_utee_sys::TEE_ERROR_SECURITY;
                     }
                     let mut parameters = Parameters::from_raw(params, param_types);
-                    let mut b = unsafe {Box::from_raw(sess_ctx as *mut #t)};
+                    let mut b = Box::from_raw(sess_ctx as *mut #t);
                     match #ident(&mut b, cmd_id, &mut parameters) {
                         Ok(_) => {
                             core::mem::forget(b);
                             optee_utee_sys::TEE_SUCCESS
                         },
-                        Err(e) => e.raw_code()
+                        Err(e) => {
+                            core::mem::forget(b);
+                            e.raw_code()
+                        }
                     }
                 }
 

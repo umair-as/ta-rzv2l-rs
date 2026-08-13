@@ -15,11 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#[cfg(feature = "std")]
-use std::os::raw::*;
-#[cfg(not(feature = "std"))]
-use core::ffi::*;
 use super::*;
+use core::ffi::*;
 
 extern "C" {
     /// tee_invoke_supp_plugin() - invoke a tee-supplicant's plugin
@@ -34,7 +31,7 @@ extern "C" {
         uuid: *const TEE_UUID,
         cmd: u32,
         sub_cmd: u32,
-        buf: *mut c_char,
+        buf: *mut c_void,
         len: usize,
         outlen: *mut usize,
     ) -> TEE_Result; 

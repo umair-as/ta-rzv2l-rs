@@ -15,17 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#[cfg(feature = "std")]
-use std::os::raw::*;
-#[cfg(not(feature = "std"))]
-use core::ffi::*;
 use super::*;
+use core::ffi::*;
 
 pub type TEE_udpSocket_Setup = TEE_udpSocket_Setup_s;
 #[repr(C)]
 pub struct TEE_udpSocket_Setup_s {
     pub ipVersion: TEE_ipSocket_ipVersion,
-    pub server_addr: *const c_char,
+    pub server_addr: *mut c_char,
     pub server_port: u16,
 }
 

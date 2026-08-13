@@ -15,13 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::{Attribute, Error, ObjHandle, Result, TransientObject};
-use optee_utee_sys as raw;
+use alloc::{boxed::Box, vec::Vec};
 use core::{mem, ptr};
-#[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+
+use optee_utee_sys as raw;
+
+use crate::{Attribute, Error, GenericObject, Result, TransientObject};
 
 /// Specify one of the available cryptographic operations.
 #[repr(u32)]
@@ -216,9 +215,9 @@ impl OperationHandle {
         }
     }
 
-    fn set_key<T: ObjHandle>(&self, object: &T) -> Result<()> {
+    fn set_key<T: GenericObject>(&self, object: &T) -> Result<()> {
         match unsafe { raw::TEE_SetOperationKey(self.handle(), object.handle()) } {
-            raw::TEE_SUCCESS => return Ok(()),
+            raw::TEE_SUCCESS => Ok(()),
             code => Err(Error::from_raw_error(code)),
         }
     }
@@ -244,7 +243,7 @@ pub fn is_algorithm_supported(alg_id: u32, element: u32) -> Result<()> {
 impl Drop for OperationHandle {
     fn drop(&mut self) {
         unsafe {
-            if self.raw != ptr::null_mut() {
+            if !self.raw.is_null() {
                 raw::TEE_FreeOperation(self.handle());
             }
             drop(Box::from_raw(self.raw));
@@ -293,15 +292,17 @@ impl Digest {
     ///
     /// # Example
     ///
-    /// ```no_run
-    /// let chunk = [0u8;8];
-    /// let chunk = [1u8;8];
-    /// let hash = [0u8;32];
+    /// ``` rust,no_run
+    /// # use optee_utee::{Digest, AlgorithmId};
+    /// # fn main() -> optee_utee::Result<()> {
+    /// let chunk1 = [0u8;8];
+    /// let chunk2 = [1u8;8];
+    /// let mut hash = [0u8;32];
     /// match Digest::allocate(AlgorithmId::Sha256) {
     ///     Ok(operation) =>
     ///     {
     ///         operation.update(&chunk1);
-    ///         match operation.do_final(&chunk2, hash) {
+    ///         match operation.do_final(&chunk2, &mut hash) {
     ///             Ok(hash_len) => {
     ///                 // ...
     ///                 Ok(())
@@ -311,6 +312,7 @@ impl Digest {
     ///     }
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -334,7 +336,7 @@ impl Digest {
                 &mut hash_size,
             )
         } {
-            raw::TEE_SUCCESS => return Ok(hash_size),
+            raw::TEE_SUCCESS => Ok(hash_size),
             code => Err(Error::from_raw_error(code)),
         }
     }
@@ -355,7 +357,9 @@ impl Digest {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ``` rust,no_run
+    /// # use optee_utee::{Digest, AlgorithmId};
+    /// # fn main() -> optee_utee::Result<()> {
     /// match Digest::allocate(AlgorithmId::Sha256) {
     ///     Ok(operation) =>
     ///     {
@@ -364,6 +368,7 @@ impl Digest {
     ///     }
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -386,8 +391,10 @@ impl Digest {
     ///
     /// # Example
     ///
-    /// ```no_run
-    /// match Digest::allocate(AlgorithmId::Md5, 128) {
+    /// ``` rust,no_run
+    /// # use optee_utee::{Digest, AlgorithmId};
+    /// # fn main() -> optee_utee::Result<()> {
+    /// match Digest::allocate(AlgorithmId::Md5) {
     ///     Ok(operation) =>
     ///     {
     ///         let info = operation.info();
@@ -395,6 +402,7 @@ impl Digest {
     ///     }
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Panics
@@ -414,11 +422,13 @@ impl Digest {
     ///
     /// # Example
     ///
-    /// ```no_run
-    /// match Digest::allocate(AlgorithmId::Md5, 128) {
+    /// ``` rust,no_run
+    /// # use optee_utee::{Digest, AlgorithmId};
+    /// # fn main() -> optee_utee::Result<()> {
+    /// match Digest::allocate(AlgorithmId::Md5) {
     ///     Ok(operation) =>
     ///     {
-    ///         let mut buffer = [0u32, 12];
+    ///         let mut buffer = [0u8, 12];
     ///         match operation.info_multiple(&mut buffer) {
     ///             Ok(info_multiple) => {
     ///                 // ...
@@ -429,6 +439,7 @@ impl Digest {
     ///     }
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Errors:
@@ -472,22 +483,25 @@ impl Digest {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ``` rust,no_run
+    /// # use optee_utee::{Digest, AlgorithmId};
+    /// # fn main() -> optee_utee::Result<()> {
     /// match Digest::allocate(AlgorithmId::Sha256) {
-    ///     Ok(operation) =>
+    ///     Ok(mut operation) =>
     ///     {
     ///         match Digest::allocate(AlgorithmId::Sha256) {
     ///             Ok(operation2) =>
     ///             {
     ///                 // ...
-    ///                 operation.copy(operation2);
+    ///                 operation.copy(&operation2);
     ///                 Ok(())
-    ///             }
+    ///             },
     ///             Err(e) => Err(e),
     ///         }
-    ///     }
+    ///     },
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Panics
@@ -555,16 +569,19 @@ impl Cipher {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ``` rust,no_run
+    /// # use optee_utee::{Cipher, AlgorithmId, TransientObject, TransientObjectType};
+    /// # use optee_utee::{AttributeMemref, AttributeId, OperationMode};
+    /// # fn main() -> optee_utee::Result<()> {
     /// let iv = [0u8, 16];
     /// let key = [0u8, 16];
     /// let src = [1u8; 4096];
     /// let mut dest = [0u8; 4096];
-    /// match Cipher::allocate(AlgorithmId::AesCtr, 128) {
+    /// match Cipher::allocate(AlgorithmId::AesCtr, OperationMode::Encrypt, 128) {
     ///     Ok(operation) =>
     ///     {
     ///         match TransientObject::allocate(TransientObjectType::Aes, 128) {
-    ///             Ok(object) =>
+    ///             Ok(mut object) =>
     ///             {
     ///                 let attr = AttributeMemref::from_ref(AttributeId::SecretValue, &key);
     ///                 object.populate(&[attr.into()])?;
@@ -578,6 +595,7 @@ impl Cipher {
     ///     }
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -604,7 +622,7 @@ impl Cipher {
             )
         } {
             raw::TEE_SUCCESS => {
-                return Ok(dest_size as usize);
+                Ok(dest_size)
             }
             code => Err(Error::from_raw_error(code)),
         }
@@ -639,7 +657,7 @@ impl Cipher {
                 &mut dest_size,
             )
         } {
-            raw::TEE_SUCCESS => return Ok(dest_size as usize),
+            raw::TEE_SUCCESS => Ok(dest_size),
             code => Err(Error::from_raw_error(code)),
         }
     }
@@ -694,7 +712,7 @@ impl Cipher {
     /// 6) If operation is not in initial state.
     /// 7) Hardware or cryptographic algorithm failure.
     /// 8) If the Implementation detects any other error.
-    pub fn set_key<T: ObjHandle>(&self, object: &T) -> Result<()> {
+    pub fn set_key<T: GenericObject>(&self, object: &T) -> Result<()> {
         self.0.set_key(object)
     }
 
@@ -724,11 +742,11 @@ impl Cipher {
     /// 6) If operation is not in initial state.
     /// 7) Hardware or cryptographic algorithm failure.
     /// 8) If the Implementation detects any other error.
-    pub fn set_key_2<T: ObjHandle, D: ObjHandle>(&self, object1: &T, object2: &D) -> Result<()> {
+    pub fn set_key_2<T: GenericObject, D: GenericObject>(&self, object1: &T, object2: &D) -> Result<()> {
         match unsafe {
             raw::TEE_SetOperationKey2(self.handle(), object1.handle(), object2.handle())
         } {
-            raw::TEE_SUCCESS => return Ok(()),
+            raw::TEE_SUCCESS => Ok(()),
             code => Err(Error::from_raw_error(code)),
         }
     }
@@ -802,7 +820,17 @@ impl Mac {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ``` rust,no_run
+    /// # use optee_utee::{
+    ///     TransientObject,
+    ///     TransientObjectType,
+    ///     Attribute,
+    ///     AttributeMemref,
+    ///     AttributeId,
+    ///     Mac,
+    ///     AlgorithmId,
+    /// };
+    /// # fn main() -> optee_utee::Result<()> {
     /// let mut key: [u8; 20] = [
     /// 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35,
     /// 0x36, 0x37, 0x38, 0x39, 0x30,];
@@ -811,17 +839,20 @@ impl Mac {
     ///     Err(e) => return Err(e),
     ///     Ok(mac) => {
     ///         match TransientObject::allocate(TransientObjectType::HmacSha1, key.len() * 8) {
-    ///         Err(e) => return Err(e),
-    ///         Ok(mut key_object) => {
-    ///             let attr = Attribute::from_ref(AttributeId::SecretValue, &key);
-    ///             key_object.populate(&[attr.into()])?;
-    ///             mac.set_key(&key_object)?;
+    ///             Err(e) => return Err(e),
+    ///             Ok(mut key_object) => {
+    ///                 let attr = AttributeMemref::from_ref(AttributeId::SecretValue, &key);
+    ///                 key_object.populate(&[attr.into()])?;
+    ///                 mac.set_key(&key_object)?;
+    ///             }
     ///         }
+    ///         mac.init(&[0u8; 0]);
+    ///         mac.update(&[0u8; 8]);
+    ///         mac.compute_final(&[0u8; 0], &mut out)?;
+    ///         Ok(())
     ///     }
-    ///     mac.init(&[0u8; 0]);
-    ///     mac.update(&[0u8; 8]);
-    ///     mac.compute_final(&[0u8; 0], &mut out)?;
     /// }
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -916,7 +947,7 @@ impl Mac {
     }
 
     /// Function usage is similar to [Cipher::set_key](Cipher::set_key).
-    pub fn set_key<T: ObjHandle>(&self, object: &T) -> Result<()> {
+    pub fn set_key<T: GenericObject>(&self, object: &T) -> Result<()> {
         self.0.set_key(object)
     }
 
@@ -977,7 +1008,7 @@ impl AE {
                 pay_load_len,
             )
         } {
-            raw::TEE_SUCCESS => return Ok(()),
+            raw::TEE_SUCCESS => Ok(()),
             code => Err(Error::from_raw_error(code)),
         }
     }
@@ -999,9 +1030,7 @@ impl AE {
     /// 5) Hardware or cryptographic algorithm failure.
     /// 6) If the Implementation detects any other error.
     pub fn update_aad(&self, aad_data: &[u8]) {
-        unsafe {
-            raw::TEE_AEUpdateAAD(self.handle(), aad_data.as_ptr() as _, aad_data.len())
-        };
+        unsafe { raw::TEE_AEUpdateAAD(self.handle(), aad_data.as_ptr() as _, aad_data.len()) };
     }
 
     /// Accumulate data for an Authentication Encryption operation.
@@ -1039,7 +1068,7 @@ impl AE {
             )
         } {
             raw::TEE_SUCCESS => {
-                return Ok(dest_size);
+                Ok(dest_size)
             }
             code => Err(Error::from_raw_error(code)),
         }
@@ -1057,7 +1086,10 @@ impl AE {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ``` rust,no_run
+    /// # use optee_utee::{AE, AlgorithmId, OperationMode, AttributeMemref, AttributeId};
+    /// # use optee_utee::{TransientObject, TransientObjectType};
+    /// # fn main() -> optee_utee::Result<()> {
     /// let key = [0xa5u8; 16];
     /// let nonce = [0x00u8; 16];
     /// let aad = [0xffu8; 16];
@@ -1069,24 +1101,27 @@ impl AE {
     /// match AE::allocate(AlgorithmId::AesCcm, OperationMode::Encrypt, 128) {
     ///     Ok(operation) => {
     ///         match TransientObject::allocate(TransientObjectType::Aes, 128) {
-    ///             Ok(key_object) => {
-    ///                 let attr = Attributememref::from_ref(Attributeid::SecretValue, &key);
-    ///                 key_object.populat(&[attr.into()])?;
+    ///             Ok(mut key_object) => {
+    ///                 let attr = AttributeMemref::from_ref(AttributeId::SecretValue, &key);
+    ///                 key_object.populate(&[attr.into()])?;
     ///                 operation.set_key(&key_object)?;
     ///                 operation.init(&nonce, 128, 16, 32)?;
     ///                 operation.update_aad(&aad);
     ///                 operation.update(&clear1, &mut ciph1)?;
-    ///                 match operation.encrypt_final(&clear2, &mut ciph2) {
+    ///                 match operation.encrypt_final(&clear2, &mut ciph2, &mut tag) {
     ///                     Ok((_ciph_len, _tag_len)) => {
     ///                         // ...
-    ///                         Ok(()),
-    ///                     }
+    ///                         Ok(())
+    ///                     },
     ///                     Err(e) => Err(e),
     ///                 }
+    ///             },
     ///             Err(e) => Err(e),
     ///         }
+    ///     },
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -1121,7 +1156,7 @@ impl AE {
             )
         } {
             raw::TEE_SUCCESS => {
-                return Ok((dest_size, tag_size));
+                Ok((dest_size, tag_size))
             }
             code => Err(Error::from_raw_error(code)),
         }
@@ -1164,7 +1199,7 @@ impl AE {
             )
         } {
             raw::TEE_SUCCESS => {
-                return Ok(dest_size);
+                Ok(dest_size)
             }
             code => Err(Error::from_raw_error(code)),
         }
@@ -1199,7 +1234,7 @@ impl AE {
     }
 
     /// Function usage is similar to [Cipher::set_key](Cipher::set_key).
-    pub fn set_key<T: ObjHandle>(&self, object: &T) -> Result<()> {
+    pub fn set_key<T: GenericObject>(&self, object: &T) -> Result<()> {
         self.0.set_key(object)
     }
 
@@ -1229,7 +1264,10 @@ impl Asymmetric {
     /// 2) `src`: Input plaintext buffer.
     ///
     /// # Example
-    /// ```no_run
+    /// ``` rust,no_run
+    /// # use optee_utee::{TransientObject, TransientObjectType, Asymmetric};
+    /// # use optee_utee::{AlgorithmId, OperationMode};
+    /// # fn main() -> optee_utee::Result<()> {
     /// let clear = [1u8; 8];
     /// match TransientObject::allocate(TransientObjectType::RsaKeypair, 256) {
     ///     Ok(key) => {
@@ -1254,6 +1292,7 @@ impl Asymmetric {
     ///     }
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -1275,7 +1314,7 @@ impl Asymmetric {
     pub fn encrypt(&self, params: &[Attribute], src: &[u8]) -> Result<Vec<u8>> {
         let p: Vec<raw::TEE_Attribute> = params.iter().map(|p| p.raw()).collect();
         let mut res_size: usize = self.info().key_size() as usize;
-        let mut res_vec: Vec<u8> = vec![0u8; res_size as usize];
+        let mut res_vec: Vec<u8> = vec![0u8; res_size];
         match unsafe {
             raw::TEE_AsymmetricEncrypt(
                 self.handle(),
@@ -1289,7 +1328,7 @@ impl Asymmetric {
         } {
             raw::TEE_SUCCESS => {
                 res_vec.truncate(res_size);
-                return Ok(res_vec);
+                Ok(res_vec)
             }
             code => Err(Error::from_raw_error(code)),
         }
@@ -1318,7 +1357,7 @@ impl Asymmetric {
     pub fn decrypt(&self, params: &[Attribute], src: &[u8]) -> Result<Vec<u8>> {
         let p: Vec<raw::TEE_Attribute> = params.iter().map(|p| p.raw()).collect();
         let mut res_size: usize = self.info().key_size() as usize;
-        let mut res_vec: Vec<u8> = vec![0u8; res_size as usize];
+        let mut res_vec: Vec<u8> = vec![0u8; res_size];
         match unsafe {
             raw::TEE_AsymmetricDecrypt(
                 self.handle(),
@@ -1331,8 +1370,8 @@ impl Asymmetric {
             )
         } {
             raw::TEE_SUCCESS => {
-                res_vec.truncate(res_size as usize);
-                return Ok(res_vec);
+                res_vec.truncate(res_size);
+                Ok(res_vec)
             }
             code => Err(Error::from_raw_error(code)),
         }
@@ -1379,7 +1418,7 @@ impl Asymmetric {
             )
         } {
             raw::TEE_SUCCESS => {
-                return Ok(signature_size);
+                Ok(signature_size)
             }
             code => Err(Error::from_raw_error(code)),
         }
@@ -1453,7 +1492,7 @@ impl Asymmetric {
     }
 
     /// Function usage is similar to [Cipher::set_key](Cipher::set_key).
-    pub fn set_key<T: ObjHandle>(&self, object: &T) -> Result<()> {
+    pub fn set_key<T: GenericObject>(&self, object: &T) -> Result<()> {
         self.0.set_key(object)
     }
 
@@ -1485,17 +1524,26 @@ impl DeriveKey {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ``` rust,no_run
+    /// # use optee_utee::{AttributeMemref, AttributeId, TransientObject, TransientObjectType};
+    /// # use optee_utee::{DeriveKey, AlgorithmId, GenericObject};
+    /// # fn example1() -> optee_utee::Result<()> {
+    ///
     /// let attr_prime = AttributeMemref::from_ref(AttributeId::DhPrime, &[23u8]);
     /// let attr_base = AttributeMemref::from_ref(AttributeId::DhBase, &[5u8]);
     /// let mut public_1 = [0u8; 32];
     /// match TransientObject::allocate(TransientObjectType::DhKeypair, 256) {
     ///     Ok(key_pair_1) => {
     ///         key_pair_1.generate_key(256, &[attr_prime.into(), attr_base.into()])?;
-    ///         key_pair_1.ref_attribute(aTTRIBUTEiD::DhPublicValue, &mut public_1)?;
+    ///         key_pair_1.ref_attribute(AttributeId::DhPublicValue, &mut public_1)?;
+    ///         Ok(())
     ///     }
     ///     Err(e) => Err(e),
     /// }
+    /// # }
+    ///
+    /// # fn example2() -> optee_utee::Result<()> {
+    /// # let mut public_1 = [0u8; 32];
     ///
     /// let attr_prime = AttributeMemref::from_ref(AttributeId::DhPrime, &[23u8]);
     /// let attr_base = AttributeMemref::from_ref(AttributeId::DhBase, &[5u8]);
@@ -1505,10 +1553,9 @@ impl DeriveKey {
     ///         match DeriveKey::allocate(AlgorithmId::DhDeriveSharedSecret, 256) {
     ///             Ok(operation) => {
     ///                 operation.set_key(&key_pair_2)?;
-    ///                 match TransientObject::allocate(TransientObjectType::GenericSecret,
-    ///                 256) {
+    ///                 match TransientObject::allocate(TransientObjectType::GenericSecret, 256) {
     ///                     // Derived key is saved as an transient object
-    ///                     Ok(derived_key) => {
+    ///                     Ok(mut derived_key) => {
     ///                         let attr_public = AttributeMemref::from_ref(AttributeId::DhPublicValue, &public_1);
     ///                         operation.derive(&[attr_public.into()], &mut derived_key);
     ///                         // ...
@@ -1522,6 +1569,7 @@ impl DeriveKey {
     ///     }
     ///     Err(e) => Err(e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Panics
@@ -1569,7 +1617,7 @@ impl DeriveKey {
     }
 
     /// Function usage is similar to [Cipher::set_key](Cipher::set_key).
-    pub fn set_key<T: ObjHandle>(&self, object: &T) -> Result<()> {
+    pub fn set_key<T: GenericObject>(&self, object: &T) -> Result<()> {
         self.0.set_key(object)
     }
 
@@ -1597,7 +1645,8 @@ impl Random {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ``` rust,no_run
+    /// # use optee_utee::Random;
     /// let mut res = [0u8;16];
     /// Random::generate(&mut res);
     /// ```
@@ -1654,6 +1703,9 @@ pub enum AlgorithmId {
     Des3CbcMacPkcs5 = 0x30000513,
     /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
     /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
+    RsassaPkcs1V15 = 0xF0000830,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
     RsassaPkcs1V15MD5 = 0x70001830,
     /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
     /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
@@ -1675,6 +1727,9 @@ pub enum AlgorithmId {
     RsassaPkcs1V15MD5Sha1 = 0x7000F830,
     /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
     /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
+    RsassaPkcs1PssMgf1MD5 = 0xF0111930,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
     RsassaPkcs1PssMgf1Sha1 = 0x70212930,
     /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
     /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
@@ -1691,6 +1746,9 @@ pub enum AlgorithmId {
     /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
     /// [Encrypt](OperationMode::Encrypt) or [Decrypt](OperationMode::Decrypt) mode.
     RsaesPkcs1V15 = 0x60000130,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Encrypt](OperationMode::Encrypt) or [Decrypt](OperationMode::Decrypt) mode.
+    RsaesPkcs1OAepMgf1MD5 = 0xF0110230,
     /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
     /// [Encrypt](OperationMode::Encrypt) or [Decrypt](OperationMode::Decrypt) mode.
     RsaesPkcs1OAepMgf1Sha1 = 0x60210230,
@@ -1718,13 +1776,30 @@ pub enum AlgorithmId {
     /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
     /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
     DSASha256 = 0x70004131,
-    /// [Asymmetric](Asymmetric) ECDSA over NIST P-256 with SHA-256, Sign/Verify mode.
-    /// GP id `0x70003042` — current OP-TEE headers map `TEE_ALG_ECDSA_P256` to this
-    /// (`TEE_ALG_ECDSA_SHA256`). Local addition (not in upstream `ec3eefd9`); see
-    /// third_party/teaclave-trustzone-sdk/README.md.
-    EcdsaP256Sha256 = 0x70003042,
     /// [DeriveKey](DeriveKey) supported algorithm.
     DhDeriveSharedSecret = 0x80000032,
+    /// [DeriveKey](DeriveKey) supported algorithm.
+    EcDhDeriveSharedSecret = 0x80000042,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
+    EcDsaSha1 = 0x70001042,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
+    EcDsaSha224 = 0x70002042,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
+    EcDsaSha256 = 0x70003042,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
+    EcDsaSha384 = 0x70004042,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
+    EcDsaSha512 = 0x70005042,
+    /// [Asymmetric](Asymmetric) supported algorithm, can be applied with
+    /// [Sign](OperationMode::Sign) or [Verify](OperationMode::Verify) mode.
+    Ed25519 = 0x70006043,
+    /// [DeriveKey](DeriveKey) supported algorithm.
+    X25519 = 0x80000044,
     /// [Digest](Digest) supported algorithm.
     Md5 = 0x50000001,
     /// [Digest](Digest) supported algorithm.
@@ -1771,4 +1846,6 @@ pub enum ElementId {
     EccCurveNistP384 = 0x00000004,
     /// Source: `NIST`, Generic: `Y`, Size: 521 bits
     EccCurveNistP521 = 0x00000005,
+    /// Source: `IETF`, Generic: `N`, Size: 256 bits
+    EccCurve25519 = 0x00000300,
 }

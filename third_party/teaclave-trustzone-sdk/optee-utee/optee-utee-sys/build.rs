@@ -15,14 +15,39 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::env;
-use std::path::Path;
+use std::env::{self, VarError};
+use std::path::PathBuf;
 
-fn main() {
-    let optee_os_dir = env::var("TA_DEV_KIT_DIR").unwrap();
-    let search_path = Path::new(&optee_os_dir).join("lib");
+fn main() -> Result<(), VarError> {
+    if !is_feature_enable("no_link")? {
+        link();
+    }
+    Ok(())
+}
 
-    println!("cargo:rustc-link-search={}", search_path.display());
+// Check if feature enabled.
+// Refer to: https://doc.rust-lang.org/cargo/reference/features.html#build-scripts
+fn is_feature_enable(feature: &str) -> Result<bool, VarError> {
+    let feature_env = format!("CARGO_FEATURE_{}", feature.to_uppercase().replace("-", "_"));
+
+    match env::var(feature_env) {
+        Err(VarError::NotPresent) => Ok(false),
+        Ok(_) => Ok(true),
+        Err(err) => Err(err),
+    }
+}
+
+fn link() {
+    let ta_dev_kit_dir = env::var("TA_DEV_KIT_DIR").expect("TA_DEV_KIT_DIR not set");
+    let library_path = PathBuf::from(ta_dev_kit_dir).join("lib");
+    if !library_path.exists() {
+        panic!(
+            "TA_DEV_KIT_DIR lib path {} does not exist",
+            library_path.display()
+        );
+    }
+
+    println!("cargo:rustc-link-search={}", library_path.display());
     println!("cargo:rustc-link-lib=static=utee");
     println!("cargo:rustc-link-lib=static=utils");
     println!("cargo:rustc-link-lib=static=mbedtls");

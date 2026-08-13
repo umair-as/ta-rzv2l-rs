@@ -1,30 +1,38 @@
-# Vendored: Apache Teaclave TrustZone SDK (patched for stable Rust)
+# Vendored: Apache Teaclave TrustZone SDK v0.7.0 (one-line patch for stable Rust)
 
-Source: https://github.com/apache/incubator-teaclave-trustzone-sdk @ `ec3eefd9de68a18d5acee1a151e0d93f6898807f`
-(the rev the upstream OP-TEE qemu_v8 4.5.0 manifest pins). Only the `optee-utee` and
-`optee-teec` crate trees are vendored — the crates our TAs (`optee-utee`) and CAs
-(`optee-teec`) depend on.
+Source: https://github.com/apache/teaclave-trustzone-sdk
+tag `v0.7.0` = `236d79dabc61bcf1925823c2928126031ff45f45` (2025-11-13), the release
+aligned with OP-TEE 4.8.0 — the OP-TEE version this board's Renesas BSP builds.
 
-## Local patch — drop the nightly requirement (toolchain-only, ABI-identical)
-The upstream rev needs nightly for two feature gates; both are removable without any ABI
-change, so the TAs build on **stable** rustc:
-- `optee-utee/optee-utee-sys/src/lib.rs`: removed `#![feature(c_size_t)]`; every `c_size_t`
-  FFI token in `tee_api_types.rs`/`tee_api.rs`/`utee_syscalls.rs` replaced with `usize`
-  (`core::ffi::c_size_t` *is* `usize` on every real target).
-- `optee-utee/src/lib.rs`: removed `#![cfg_attr(not(feature = "std"), feature(error_in_core))]`
-  (`core::error::Error` is stable since Rust 1.81).
+Vendored trees: `optee-utee` (TA-side), `optee-teec` (host-side), and
+`optee-utee-build` (TA build-script support: TA header generation and linker
+setup; a build-dependency of every TA crate). Upstream `LICENSE`, `NOTICE`, and
+`licenses/` are retained verbatim; every vendored `.rs` file keeps its original
+ASF header. (The incubator-era `DISCLAIMER-WIP`/`KEYS` files no longer exist at
+this upstream tag.)
 
-No logic, type layout, or ABI changed. See VERSIONS.md ("TA build toolchain").
+Note: at this tag the `optee-utee` crate manifest still says version 0.6.0.
+The tag/commit above is the source of truth, not the crate version string —
+do not substitute a similarly-versioned crates.io package.
 
-## Local addition — `AlgorithmId::EcdsaP256Sha256`
-`optee-utee/src/crypto_op.rs`: added one `AlgorithmId` enum variant
-`EcdsaP256Sha256 = 0x70003042` (the GP id current OP-TEE headers map `TEE_ALG_ECDSA_P256`
-to). Upstream `ec3eefd9` predates ECDSA in that enum; modelguard needs it for manifest
-signature verification and previously reached it via an unsound `transmute` — this variant
-replaces that. Additive, backward-compatible.
+## Local patch — exactly one line
+
+`optee-utee/src/lib.rs`: removed
+
+```rust
+#![cfg_attr(not(feature = "std"), feature(error_in_core))]
+```
+
+`core::error::Error` is stable since Rust 1.81, so on this repo's pinned stable
+toolchain the gate is not only unnecessary — declaring it is itself a nightly-only
+act, which is why the line must go rather than stay dormant. No logic, type
+layout, or ABI is affected.
+
+The previous vendored revision (`ec3eefd9`, March 2024) needed a 33-token
+`c_size_t` rewrite and a locally added ECDSA `AlgorithmId` variant; v0.7.0 has
+both natively (`usize` FFI, `AlgorithmId::EcDsaSha256`), so those local changes
+are retired, not carried forward.
 
 ## License
 
-Apache-2.0. The upstream `LICENSE`, `NOTICE`, `DISCLAIMER-WIP`, and `KEYS` are
-retained here verbatim per Apache-2.0 §4; every vendored `.rs` file keeps its
-original ASF header. The two-line patch above does not alter licensing.
+Apache-2.0.
