@@ -16,6 +16,9 @@
 #
 # `make lint` remains the fuller local gate (it also clippy-checks the TA
 # with unwrap/expect/panic forbidden, using the real dev kit).
+#
+# Actions are pinned to full commit SHAs; --locked makes CI fail if a
+# Cargo.toml change lands without its Cargo.lock.
 
 name: ci
 
@@ -24,23 +27,32 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   rust:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
+          toolchain: stable
           components: clippy, rustfmt
           targets: aarch64-unknown-linux-gnu
 
       - name: Cache cargo registry and target
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
         with:
           workspaces: |
             signer/proto
@@ -55,23 +67,24 @@ jobs:
       - name: Clippy + build proto
         working-directory: signer/proto
         run: |
-          cargo clippy --release -- -D warnings
-          cargo build --release
+          cargo clippy --locked --release -- -D warnings
+          cargo build --locked --release
 
       - name: Clippy host (aarch64 check, no link)
         working-directory: signer/host
         run: |
           mkdir -p "$RUNNER_TEMP/teec-stub/usr/lib"
           OPTEE_CLIENT_EXPORT="$RUNNER_TEMP/teec-stub" \
-            cargo clippy --release --target aarch64-unknown-linux-gnu -- -D warnings
+            cargo clippy --locked --release --target aarch64-unknown-linux-gnu -- -D warnings
 
   verifier:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install cryptography
-        run: python3 -m pip install --quiet cryptography
+      - name: Install cryptography (version the checks were developed against)
+        run: python3 -m pip install --quiet 'cryptography==44.0.0'
 
       - name: verify.py self-test (positive + three tampered cases)
         run: python3 tests/verify-selftest.py
