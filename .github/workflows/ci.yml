@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# CI checks only what a runner can honestly check. The TA cannot build here
+# (its build script needs TA_DEV_KIT_DIR from the board's exact OP-TEE
+# build), and nothing on a runner substitutes for hardware: the acceptance
+# gate for any signer change remains `make test` against the board.
+#
+# What runs here:
+#   - cargo fmt --check for all three crates (no build required)
+#   - clippy + release build for proto (self-contained no_std library)
+#   - clippy for host against a stub OPTEE_CLIENT_EXPORT (the optee-teec-sys
+#     build script only needs the directory to exist; clippy never links, so
+#     no libteec is required)
+#   - the verify.py self-test: genuine signature accepted, tampered digest /
+#     signature / pubkey each rejected
+#
+# `make lint` remains the fuller local gate (it also clippy-checks the TA
+# with unwrap/expect/panic forbidden, using the real dev kit).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            signer/proto
+            signer/host
+
+      - name: Format check (all three crates)
+        run: |
+          cargo fmt --check --manifest-path signer/proto/Cargo.toml
+          cargo fmt --check --manifest-path signer/host/Cargo.toml
+          cargo fmt --check --manifest-path signer/ta/Cargo.toml
+
+      - name: Clippy + build proto
+        working-directory: signer/proto
+        run: |
+          cargo clippy --release -- -D warnings
+          cargo build --release
+
+      - name: Clippy host (aarch64 check, no link)
+        working-directory: signer/host
+        run: |
+          mkdir -p "$RUNNER_TEMP/teec-stub/usr/lib"
+          OPTEE_CLIENT_EXPORT="$RUNNER_TEMP/teec-stub" \
+            cargo clippy --release --target aarch64-unknown-linux-gnu -- -D warnings
+
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cryptography
+        run: python3 -m pip install --quiet cryptography
+
+      - name: verify.py self-test (positive + three tampered cases)
+        run: python3 tests/verify-selftest.py

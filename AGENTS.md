@@ -27,6 +27,10 @@ Run `make lint` before considering any Rust change done. The TA crate is gated o
 `clippy::unwrap_used` / `expect_used` / `panic` — secure-world code must return errors, not
 panic.
 
+CI (`.github/workflows/ci.yml`) covers only what a runner can honestly check: fmt for all
+crates, clippy/build for the crates that need no board artifacts, and the `verify.py`
+self-test. CI green is **not** acceptance — the board smoke test is.
+
 - The dev loop is `scp`, never a Yocto image rebuild (seconds vs an hour).
 - Don't run bare `cargo build` in `signer/ta/` — the TA needs `TA_DEV_KIT_DIR`,
   `RUSTFLAGS="-C panic=abort"`, and the sign step; go through the Makefiles.
