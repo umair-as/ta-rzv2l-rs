@@ -112,21 +112,26 @@ else
 fi
 
 # --- 6. TA boundary: direct malformed invocations via ta-probe ------------
-# Each probe bypasses the CLI and speaks raw TEEC to the TA; exit 0 means
-# the TA behaved as the contract requires (error for malformed, ok for valid).
+# ta-probe runs the whole sequence in ONE process and ONE session and ends
+# with a valid request in that same session, so a TA crash cannot hide
+# behind a freshly loaded instance. A malformed case passes only if the TA
+# itself (error origin TA) returned the exact expected error code.
 if board "test -x $PROBE"; then
+	probe_out=$(board "$PROBE" 2>/dev/null) || true
 	for case in sign-short-digest unknown-command pubkey-wrong-direction \
 			sign-wrong-direction pubkey-extra-param; do
-		if board "$PROBE $case" >/dev/null 2>&1; then
-			ok "TA rejects $case (direct invocation)"
+		if printf '%s\n' "$probe_out" | grep -q "^PASS $case:"; then
+			ok "TA rejects $case with the exact expected error (same session)"
 		else
-			bad "TA did NOT reject $case (direct invocation)"
+			bad "TA boundary check failed: $case"
+			printf '%s\n' "$probe_out" | grep "^FAIL $case:" || true
 		fi
 	done
-	if board "$PROBE valid" >/dev/null 2>&1; then
-		ok "TA still functional after direct malformed invocations"
+	if printf '%s\n' "$probe_out" | grep -q "^PASS valid-after:"; then
+		ok "TA still functional in the same session after malformed invocations"
 	else
-		bad "TA stopped working after direct malformed invocations"
+		bad "TA not functional after malformed invocations (same session)"
+		printf '%s\n' "$probe_out" | grep "^FAIL valid-after:" || true
 	fi
 else
 	bad "ta-probe not installed - run 'make deploy' first"

@@ -72,15 +72,20 @@ fn zeroize(buf: &mut [u8]) {
 }
 
 /// Read one object attribute left-padded into a FIELD-byte destination.
+/// `tmp` may hold private material after a partial read, so it is scrubbed
+/// on every path out, error or success.
 fn read_padded(key: &TransientObject, id: AttributeId, out: &mut [u8]) -> Result<()> {
     let mut tmp = [0u8; FIELD];
-    let n = key.ref_attribute(id, &mut tmp)?;
-    if n > FIELD {
-        return Err(Error::new(ErrorKind::Generic));
-    }
-    out[FIELD - n..].copy_from_slice(&tmp[..n]);
+    let res = match key.ref_attribute(id, &mut tmp) {
+        Ok(n) if n <= FIELD => {
+            out[FIELD - n..].copy_from_slice(&tmp[..n]);
+            Ok(())
+        }
+        Ok(_) => Err(Error::new(ErrorKind::Generic)),
+        Err(e) => Err(e),
+    };
     zeroize(&mut tmp);
-    Ok(())
+    res
 }
 
 /// Serialize the key pair into `blob`. On error the caller must scrub `blob`:

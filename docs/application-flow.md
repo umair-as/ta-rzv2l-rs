@@ -238,16 +238,22 @@ accordingly:
   before it opens a TA session. These prove the public CLI validates input; they say nothing
   about the TA.
 - **TA-boundary checks**: a second on-board binary, `ta-probe`, deliberately bypasses the
-  CLI and speaks raw TEEC to the TA. It sends a short digest with a correct parameter layout,
-  an unknown numeric command ID, wrong memref directions for both commands, and an unexpected
-  extra parameter — each must be rejected by the TA itself — then issues a valid call that
-  must still succeed. The TA enforces the exact GP parameter layout per command
-  (`GetPubkey`: one output memref; `Sign`: input memref + output memref; unused slots must be
-  `None`; sessions carry no parameters), so a custom or hostile REE client gets the same
-  rejections.
+  CLI and speaks raw TEEC to the TA. In one process and one session it sends a short digest
+  with a correct parameter layout, an unknown numeric command ID, wrong memref directions for
+  both commands, and an unexpected extra parameter, then a valid request in that same
+  session. A malformed case passes only if the TA itself (error origin TA) returned the
+  exact expected code — `BadParameters`, or `NotSupported` for the unknown command — so a TA
+  panic, transport failure, or unrelated error counts as a failure, and a crash cannot hide
+  behind a freshly loaded TA instance in a later process. The TA enforces the exact GP
+  parameter layout per command (`GetPubkey`: one output memref; `Sign`: input memref +
+  output memref; unused slots must be `None`; sessions carry no parameters), so a custom or
+  hostile REE client gets the same rejections.
 
-These probes were mutation-tested: with the TA's validation deliberately disabled in a
-temporary build, all five TA-boundary checks fail; with validation restored they pass.
+These probes were mutation-tested twice: with the TA's validation deliberately disabled in a
+temporary build, all five TA-boundary checks fail; with the TA returning the wrong error kind
+(`Generic` instead of `BadParameters`), the layout-driven cases fail with a precise diagnostic
+while the digest-length case — a different code path — still passes. Validation restored,
+everything passes.
 
 ## Security boundary and storage limitation
 
