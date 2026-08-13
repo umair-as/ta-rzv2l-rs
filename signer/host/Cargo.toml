@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "signer-client"
+version = "0.1.0"
+authors = ["The ta-rzv2l-rs authors"]
+license = "Apache-2.0"
+description = "signer client application (ECDSA P-256 device signer CLI)."
+edition = "2021"
+
+[[bin]]
+name = "signer-client"
+path = "src/main.rs"
+
+[dependencies]
+proto = { path = "../proto" }
+optee-teec = { path = "../../third_party/teaclave-trustzone-sdk/optee-teec" }
+
+[profile.release]
+lto = true

@@ -4,8 +4,14 @@
 # Board smoke test for the signer TA. Runs on the host, drives the board over
 # ssh, and verifies every signature locally with a different crypto library.
 #
+# Checks are labeled by the boundary they actually exercise:
+#   CLI  = signer-client argument validation (rejected before any TEE call)
+#   TA   = direct malformed invocations sent to the TA via ta-probe,
+#          deliberately bypassing the CLI's validation
+#
 #   BOARD_HOST=<ip> tests/board-smoke.sh
 #   BOARD_HOST=<ip> REBOOT=1 tests/board-smoke.sh     # also test persistence
+#   PYTHON=/usr/bin/python3 ... to pick the interpreter used for verification
 #
 # Exit 0 = all checks pass.
 
@@ -14,8 +20,10 @@ set -eu
 BOARD_USER="${BOARD_USER:-devel}"
 BOARD_HOST="${BOARD_HOST:-}"
 CLIENT="${CLIENT:-/usr/local/bin/signer-client}"
+PROBE="${PROBE:-/usr/local/bin/ta-probe}"
 SSH="${SSH:-ssh}"
 REBOOT="${REBOOT:-0}"
+PYTHON="${PYTHON:-python3}"
 
 HERE=$(dirname "$0")
 pass=0
@@ -23,6 +31,14 @@ fail=0
 
 if [ -z "$BOARD_HOST" ]; then
 	echo "BOARD_HOST is not set" >&2
+	exit 2
+fi
+
+# Fail early and clearly if the chosen interpreter cannot verify signatures;
+# otherwise a venv without `cryptography` misreports as "signature failed".
+if ! "$PYTHON" -c 'import cryptography' 2>/dev/null; then
+	echo "error: $PYTHON cannot import 'cryptography' (needed by tests/verify.py)." >&2
+	echo "       Deactivate the venv or rerun with PYTHON=/usr/bin/python3" >&2
 	exit 2
 fi
 
@@ -44,7 +60,7 @@ fi
 
 # --- 2. public key ------------------------------------------------------
 if pub_json=$(board "$CLIENT pubkey" 2>/dev/null); then
-	pub1=$(printf '%s' "$pub_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["pubkey"])')
+	pub1=$(printf '%s' "$pub_json" | "$PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["pubkey"])')
 	if [ "${#pub1}" -eq 128 ]; then
 		ok "public key retrieved (${#pub1} hex chars)"
 	else
@@ -58,10 +74,11 @@ fi
 # --- 3. sign and verify -------------------------------------------------
 digest=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
 if sig_json=$(board "$CLIENT sign $digest" 2>/dev/null); then
-	if printf '%s' "$sig_json" | python3 "$HERE/verify.py" >/dev/null 2>&1; then
+	if verdict=$(printf '%s' "$sig_json" | "$PYTHON" "$HERE/verify.py" 2>&1); then
 		ok "signature verified on the host against the TA's public key"
 	else
 		bad "signature did NOT verify"
+		printf '  verifier said: %s\n' "$verdict"
 		printf '%s\n' "$sig_json"
 	fi
 else
@@ -73,43 +90,57 @@ fi
 # Without this, a verifier that ignores the digest would look like a pass.
 other=$(printf '%s' "$digest" | sed 's/^../ff/')
 if [ "$other" = "$digest" ]; then other=$(printf '%s' "$digest" | sed 's/^../00/'); fi
-tampered=$(printf '%s' "$sig_json" | python3 -c \
+tampered=$(printf '%s' "$sig_json" | "$PYTHON" -c \
 	"import json,sys; d=json.load(sys.stdin); d['digest']='$other'; print(json.dumps(d))")
-if printf '%s' "$tampered" | python3 "$HERE/verify.py" >/dev/null 2>&1; then
+if printf '%s' "$tampered" | "$PYTHON" "$HERE/verify.py" >/dev/null 2>&1; then
 	bad "verifier accepted a signature over a DIFFERENT digest"
 else
 	ok "signature is bound to its digest (tampered digest rejected)"
 fi
 
-# --- 5. malformed input is rejected without killing the TA ---------------
+# --- 5. CLI input validation (never reaches the TA) -----------------------
 if board "$CLIENT sign deadbeef" >/dev/null 2>&1; then
-	bad "short digest was accepted"
+	bad "CLI accepted a short digest"
 else
-	ok "short digest rejected"
+	ok "CLI rejects a short digest"
 fi
 
 if board "$CLIENT bogus-command" >/dev/null 2>&1; then
-	bad "unknown command was accepted"
+	bad "CLI accepted an unknown command"
 else
-	ok "unknown command rejected"
+	ok "CLI rejects an unknown command"
 fi
 
-# The TA must still work after being fed bad input.
-if board "$CLIENT pubkey" >/dev/null 2>&1; then
-	ok "TA still responsive after malformed input"
+# --- 6. TA boundary: direct malformed invocations via ta-probe ------------
+# Each probe bypasses the CLI and speaks raw TEEC to the TA; exit 0 means
+# the TA behaved as the contract requires (error for malformed, ok for valid).
+if board "test -x $PROBE"; then
+	for case in sign-short-digest unknown-command pubkey-wrong-direction \
+			sign-wrong-direction pubkey-extra-param; do
+		if board "$PROBE $case" >/dev/null 2>&1; then
+			ok "TA rejects $case (direct invocation)"
+		else
+			bad "TA did NOT reject $case (direct invocation)"
+		fi
+	done
+	if board "$PROBE valid" >/dev/null 2>&1; then
+		ok "TA still functional after direct malformed invocations"
+	else
+		bad "TA stopped working after direct malformed invocations"
+	fi
 else
-	bad "TA stopped responding after malformed input"
+	bad "ta-probe not installed - run 'make deploy' first"
 fi
 
-# --- 6. same key across TA restarts --------------------------------------
-pub2=$(board "$CLIENT pubkey" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["pubkey"])')
+# --- 7. same key across TA restarts --------------------------------------
+pub2=$(board "$CLIENT pubkey" 2>/dev/null | "$PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["pubkey"])')
 if [ "$pub1" = "$pub2" ]; then
 	ok "same public key across invocations"
 else
 	bad "public key changed between invocations"
 fi
 
-# --- 7. persistence across reboot (opt-in) -------------------------------
+# --- 8. persistence across reboot (opt-in) -------------------------------
 if [ "$REBOOT" = "1" ]; then
 	echo "  ....  rebooting the board (REBOOT=1)"
 	board "sudo systemctl reboot" >/dev/null 2>&1 || true
@@ -121,7 +152,7 @@ if [ "$REBOOT" = "1" ]; then
 		n=$((n + 1))
 	done
 	if board "true" >/dev/null 2>&1; then
-		pub3=$(board "$CLIENT pubkey" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["pubkey"])')
+		pub3=$(board "$CLIENT pubkey" 2>/dev/null | "$PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["pubkey"])')
 		if [ "$pub1" = "$pub3" ]; then
 			ok "same public key after reboot (key is persistent)"
 		else

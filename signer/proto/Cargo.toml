@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# signer proto: command IDs, wire-layout constants, and UUID shared by host client + TA.
+[package]
+name = "proto"
+version = "0.1.0"
+authors = ["The ta-rzv2l-rs authors"]
+license = "Apache-2.0"
+description = "signer: data structures and wire constants shared by host and TA."
+edition = "2021"
+
+[dependencies]

@@ -10,12 +10,17 @@ target/
 ta.lds
 dyn_list
 
+# Machine-specific build configuration (paths, board address)
+local.mk
+
 # Session notes, handoffs, working material.
 # Never tracked: these hold board addresses, credentials and session detail.
 scratch/
 
-# Agent working files
-.claude/
+# Agent working files (but track the project hook config)
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 # python
 __pycache__/

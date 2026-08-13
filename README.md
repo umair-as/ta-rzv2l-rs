@@ -11,17 +11,38 @@ appears to work.
 
 ## Status
 
-Scaffolding only. No Trusted Application has been written in this repo yet.
+**Milestone 1 — device signer: done, verified on hardware (2026-08-13).** One TA owning one
+ECDSA P-256 key pair generated inside the TEE and never exported — the interface has no
+command that returns private material. Two commands: read the public key (`X||Y`, 64 bytes),
+sign a caller-supplied SHA-256 digest (`r||s`, 64 bytes; the TA does not hash). Signatures
+are verified on the host with a different crypto library, which is stronger evidence than the
+client checking its own work.
 
-**Milestone 1 — device signer.** One TA owning one ECDSA P-256 key pair generated inside the
-TEE and never exported. Two commands: read the public key, sign a caller-supplied SHA-256
-digest. Signatures are verified on the host with a different crypto library, which is stronger
-evidence than the client checking its own work.
+All fourteen board smoke checks pass, including: signature verifies on the host and *fails*
+against a tampered digest; the client rejects short digests and unknown commands; direct
+malformed TA invocations (short digest, unknown command ID, wrong parameter directions, extra
+parameters) sent by an on-board probe that bypasses the client are rejected by the TA itself,
+which stays functional afterward; and the public key is unchanged across invocations and
+across a board reboot. The test boundary is described precisely in `docs/application-flow.md`.
+
+The TA fails closed on a damaged key object: only `ITEM_NOT_FOUND` (genuine first boot)
+triggers key generation. Anything else is an error — silently regenerating over tamper would
+replace the device's identity, which is exactly what an attacker wants to look like a first
+boot.
 
 ## Layout
 
+For a newcomer-oriented explanation of the Rust crates, execution environments, key lifecycle,
+and build/test path, see [`docs/application-flow.md`](docs/application-flow.md).
+
 ```
-third_party/teaclave-trustzone-sdk/   vendored + patched Apache Teaclave SDK
+docs/application-flow.md              architecture and development walkthrough
+docs/security-model.md                claims, attacker tiers, and platform limits
+signer/proto/                         shared protocol: UUID, command IDs, wire sizes
+signer/ta/                            the Trusted Application (no_std)
+signer/host/                          signer-client CLI + ta-probe TA-boundary tester
+signer/uuid.txt                       single source of truth for the TA UUID
+third_party/teaclave-trustzone-sdk/   vendored Apache Teaclave SDK v0.7.0 (see its README)
 tests/verify.py                       independent host-side signature verification
 tests/board-smoke.sh                  end-to-end board test
 scratch/                              session notes and handoffs (not tracked)
@@ -41,19 +62,39 @@ the one running on the board risks subtle ABI mismatches.
 | Cross toolchain | `aarch64-linux-gnu-` |
 | Board | Renesas RZ/V2L SMARC EVK, `r9a07g054l2`, security-capable SKU, glibc 2.43 |
 
-**The vendored SDK is patched.** Two nightly-only gates were removed ABI-safely so the TAs
-build on **stable** rustc rather than a pinned nightly. That patch is the reason this repo
-works at all — do not replace `third_party/teaclave-trustzone-sdk/` with upstream.
+**The vendored SDK is upstream v0.7.0 with a one-line patch.** v0.7.0 is the Teaclave release
+aligned with OP-TEE 4.8.0 — the OP-TEE version this board runs. One nightly-only feature gate
+(`error_in_core`, stable since Rust 1.81) is removed so the TAs build on **stable** rustc;
+everything else is byte-identical to the upstream tag. Provenance and the exact diff are in
+`third_party/teaclave-trustzone-sdk/README.md`. The migration from the previous March-2024
+SDK pin was accepted only after the full board smoke test passed against this build.
 
 ## Development loop
 
 The dev loop is `scp`, not a Yocto image rebuild — seconds instead of an hour. Yocto packaging
 is the production path and a separate, later concern.
 
+Machine-specific paths go in an untracked `local.mk` at the repo root:
+
+```make
+TA_DEV_KIT_DIR      := <path to OP-TEE export-ta_arm64 from the board's exact build>
+OPTEE_CLIENT_EXPORT := <dir containing usr/lib/libteec.so for cross-linking>
+BOARD_HOST          := <board ip or name>          # optional; or pass on the command line
+```
+
 ```sh
-make                                  # build TA + client
-make deploy BOARD_HOST=<ip-or-name>   # scp both to the board
-make test   BOARD_HOST=<ip-or-name>   # run the smoke test
+make                                  # build the signed .ta + signer-client
+make deploy BOARD_HOST=<ip-or-name>   # install both on the board (needs sudo over ssh)
+make test   BOARD_HOST=<ip-or-name>   # run the smoke test; REBOOT=1 adds the reboot check
+```
+
+Both the OP-TEE TA signing script and `tests/verify.py` need the Python `cryptography` package.
+If a virtual environment is active, confirm that its `python3` can import the package. Manual
+verification is one pipe:
+
+```sh
+ssh <user>@<board> signer-client sign $(head -c 32 /dev/urandom | sha256sum | cut -c1-64) \
+    | tests/verify.py
 ```
 
 ## Platform notes that shape the design
@@ -74,14 +115,8 @@ would silently bind to a volatile fake RPMB that looks like it works.
 the GP Internal Core API; it blocks any Renesas Secure IP work until its bbappend mirrors the
 `ENABLE_RZ_SCE` block from `optee-os_%.bbappend`.
 
-Fuller cited detail is in `scratch/CAPABILITY-MAP-2026-08-12.md`.
+The security consequences are summarized in `docs/security-model.md`.
 
-## History
-
-This repo replaces an earlier one that accumulated a 53-requirement specification framework
-across four deliverables with roughly a dozen executable checks — more scaffolding than was
-useful, and written in a product register that did not match what the project is. That work is
-preserved in a frozen archive alongside this directory; nothing was lost.
 
 ## License
 
