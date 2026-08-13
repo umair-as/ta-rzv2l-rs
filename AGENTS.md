@@ -6,15 +6,11 @@ hardware**, not feature count. A limitation proven on the board and written down
 a feature that appears to work. Never write in a product/fleet register and never claim
 security properties the platform notes below don't support.
 
-Session context: if `scratch/` exists (gitignored, local only), read its newest handoff/
-evaluation notes before starting work — decisions recorded there are settled; do not
-re-litigate them.
-
 ## Build, deploy, test
 
 Machine-specific paths live in an untracked `local.mk` at the repo root
 (`TA_DEV_KIT_DIR`, `OPTEE_CLIENT_EXPORT`, `BOARD_HOST`, optional `SSH`/`SCP` overrides).
-Board addresses and credentials belong there or in `scratch/` — never in tracked files.
+Board addresses and credentials belong in `local.mk` — never in tracked files.
 
 ```sh
 make                                  # signed .ta + signer-client (cross, stable Rust)

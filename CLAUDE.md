@@ -11,4 +11,3 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   `make lint` is the gate that must pass before a change is done.
 - The board is driven over ssh (`local.mk` holds the address); serial console access exists
   via the `mcp-serial-rs` MCP server when ssh is down.
-- `scratch/` holds session handoffs — start there when it exists.
