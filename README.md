@@ -1,5 +1,9 @@
 # ta-rzv2l-rs
 
+[![ci](https://github.com/umair-as/ta-rzv2l-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/umair-as/ta-rzv2l-rs/actions/workflows/ci.yml)
+[![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![rust: stable](https://img.shields.io/badge/rust-stable-orange.svg)](rust-toolchain.toml)
+
 Rust OP-TEE Trusted Applications for the Renesas RZ/V2L, built and verified on real hardware.
 
 A personal learning project. The goal is to understand how Trusted Applications are built and
@@ -9,44 +13,30 @@ Success is measured by what has been **demonstrated and understood**, not by fea
 limitation proven on hardware and written down plainly is a better outcome than a feature that
 appears to work.
 
-## Status
+## The device signer
 
-**Milestone 1 — device signer: done, verified on hardware (2026-08-13).** One TA owning one
-ECDSA P-256 key pair generated inside the TEE and never exported — the interface has no
-command that returns private material. Two commands: read the public key (`X||Y`, 64 bytes),
-sign a caller-supplied SHA-256 digest (`r||s`, 64 bytes; the TA does not hash). Signatures
-are verified on the host with a different crypto library, which is stronger evidence than the
-client checking its own work.
+The first application, working end to end on the board since 2026-08-13: one Trusted
+Application owns one ECDSA P-256 key pair, generated inside the TEE and never exported — the
+interface has no command that returns private material. A caller can read the public key
+(`X||Y`, 64 bytes) or have a SHA-256 digest signed (`r||s`, 64 bytes; the TA does not hash).
+Signatures are verified on the development host with a different crypto library, which is
+stronger evidence than the client checking its own work.
 
-All fourteen board smoke checks pass, including: signature verifies on the host and *fails*
-against a tampered digest; the client rejects short digests and unknown commands; direct
-malformed TA invocations (short digest, unknown command ID, wrong parameter directions, extra
-parameters) sent by an on-board probe that bypasses the client are rejected by the TA itself,
-which stays functional afterward; and the public key is unchanged across invocations and
-across a board reboot. The test boundary is described precisely in `docs/application-flow.md`.
+Fourteen board checks pass, including: a signature verifies on the host and *fails* against a
+tampered digest; malformed requests sent straight to the TA — bypassing the client — are
+rejected by the TA itself with the exact expected error, in a single session that must still
+answer a valid request afterward; and the public key is unchanged across invocations and
+across a reboot. The TA fails closed on a damaged key object: only "not found" (genuine first
+boot) triggers key generation, because silently regenerating over tamper would replace the
+device's identity — exactly what an attacker wants to look like a first boot.
 
-The TA fails closed on a damaged key object: only `ITEM_NOT_FOUND` (genuine first boot)
-triggers key generation. Anything else is an error — silently regenerating over tamper would
-replace the device's identity, which is exactly what an attacker wants to look like a first
-boot.
+Every negative check has been mutation-tested: deliberately weakened TA builds make the checks
+fail for the expected reason, so a green run means something.
 
-## Layout
-
-For a newcomer-oriented explanation of the Rust crates, execution environments, key lifecycle,
-and build/test path, see [`docs/application-flow.md`](docs/application-flow.md).
-
-```
-docs/application-flow.md              architecture and development walkthrough
-docs/security-model.md                claims, attacker tiers, and platform limits
-signer/proto/                         shared protocol: UUID, command IDs, wire sizes
-signer/ta/                            the Trusted Application (no_std)
-signer/host/                          signer-client CLI + ta-probe TA-boundary tester
-signer/uuid.txt                       single source of truth for the TA UUID
-third_party/teaclave-trustzone-sdk/   vendored Apache Teaclave SDK v0.7.0 (see its README)
-tests/verify.py                       independent host-side signature verification
-tests/board-smoke.sh                  end-to-end board test
-scratch/                              session notes and handoffs (not tracked)
-```
+How the pieces fit together — the two TrustZone worlds, the crates, the key lifecycle, the
+build and test flow — is explained in [`docs/application-flow.md`](docs/application-flow.md).
+What the signer protects against, per attacker tier, and what it deliberately does not claim,
+is in [`docs/security-model.md`](docs/security-model.md).
 
 ## Toolchain and platform pins
 
@@ -66,10 +56,10 @@ the one running on the board risks subtle ABI mismatches.
 aligned with OP-TEE 4.8.0 — the OP-TEE version this board runs. One nightly-only feature gate
 (`error_in_core`, stable since Rust 1.81) is removed so the TAs build on **stable** rustc;
 everything else is byte-identical to the upstream tag. Provenance and the exact diff are in
-`third_party/teaclave-trustzone-sdk/README.md`. The migration from the previous March-2024
-SDK pin was accepted only after the full board smoke test passed against this build.
+the vendored tree's own README. The migration from the previous March-2024 SDK pin was
+accepted only after the full board smoke test passed against this build.
 
-## Development loop
+## Building and testing
 
 The dev loop is `scp`, not a Yocto image rebuild — seconds instead of an hour. Yocto packaging
 is the production path and a separate, later concern.
@@ -83,19 +73,26 @@ BOARD_HOST          := <board ip or name>          # optional; or pass on the co
 ```
 
 ```sh
-make                                  # build the signed .ta + signer-client
-make deploy BOARD_HOST=<ip-or-name>   # install both on the board (needs sudo over ssh)
-make test   BOARD_HOST=<ip-or-name>   # run the smoke test; REBOOT=1 adds the reboot check
+make                                  # build the signed .ta + on-board programs
+make deploy BOARD_HOST=<ip-or-name>   # install them on the board (needs sudo over ssh)
+make test   BOARD_HOST=<ip-or-name>   # run the board test; REBOOT=1 adds the reboot check
+make lint                             # fmt + clippy; the TA forbids unwrap/expect/panic
 ```
 
-Both the OP-TEE TA signing script and `tests/verify.py` need the Python `cryptography` package.
-If a virtual environment is active, confirm that its `python3` can import the package. Manual
-verification is one pipe:
+Both the OP-TEE TA signing script and the host-side verifier need the Python `cryptography`
+package. If a virtual environment is active, confirm that its `python3` can import the package
+(the build and test both preflight this and say so plainly if not). Manual verification is one
+pipe:
 
 ```sh
 ssh <user>@<board> signer-client sign $(head -c 32 /dev/urandom | sha256sum | cut -c1-64) \
     | tests/verify.py
 ```
+
+CI runs the subset of this that needs no hardware: formatting for every crate, clippy and
+builds for the crates that don't require the board's dev kit, and a self-test of the verifier
+(genuine signature accepted; tampered digest, signature, and public key each rejected). CI
+green is not acceptance — the board test is.
 
 ## Platform notes that shape the design
 
@@ -115,8 +112,14 @@ would silently bind to a volatile fake RPMB that looks like it works.
 the GP Internal Core API; it blocks any Renesas Secure IP work until its bbappend mirrors the
 `ENABLE_RZ_SCE` block from `optee-os_%.bbappend`.
 
-The security consequences are summarized in `docs/security-model.md`.
+The security consequences are summarized in [`docs/security-model.md`](docs/security-model.md).
 
+## What comes next
+
+Two independent mechanisms are the natural continuations, and each will be claimed only when
+demonstrated on this board: a hardware-backed key (Renesas Secure IP) behind the same
+two-command interface, and rollback-resistant storage via the eMMC's RPMB partition. Neither
+changes the client or the protocol.
 
 ## License
 

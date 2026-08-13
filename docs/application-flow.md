@@ -111,8 +111,8 @@ It connects five places:
 
 OP-TEE receives an open-session request for that UUID and asks `tee-supplicant` in the normal
 world to load the matching TA file. The UUID is routing and identity, not a secret, credential,
-or proof of which normal-world process is calling. This milestone does not authenticate REE
-callers; a process able to use the TEE client interface can request a signature.
+or proof of which normal-world process is calling. The current signer does not authenticate
+REE callers; a process able to use the TEE client interface can request a signature.
 
 ## Key lifecycle
 

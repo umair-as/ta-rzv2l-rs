@@ -102,6 +102,6 @@ Design decisions that look odd but are deliberate:
 - **The board's `tee-supplicant` is built `RPMB_EMU=1`** — enabling `CFG_RPMB_FS=y` today
   would silently bind to a volatile fake RPMB that looks like it works.
 - **The packaged `optee-os-tadevkit` lacks `CFG_RZ_SCE`** — harmless for GP-API TAs, blocks
-  Renesas Secure IP work (milestone 2) until its bbappend is fixed.
+  Renesas Secure IP work (the planned hardware-key iteration) until its bbappend is fixed.
 - **ABI pin**: the TA dev kit must come from the same OP-TEE build that runs on the board.
   After any Yocto rebuild + reflash: rebuild, redeploy, re-run `make test`.

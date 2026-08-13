@@ -2,7 +2,7 @@
 
 What the signer does and does not protect, by attacker capability, with the evidence for each
 claim. The rule of this project is to claim exactly what has been demonstrated on this board —
-no more. This document will grow as milestones add mechanisms; it is not a compliance artifact.
+no more. This document will grow as mechanisms land; it is not a compliance artifact.
 
 ## The claim, precisely
 
@@ -64,12 +64,12 @@ key?* It does not answer: *does this public key belong to this device?* An attac
 their own key pair and a perfectly verifying signature. Binding a public key to a device
 identity requires enrollment — recording the key through a trusted channel, comparing
 fingerprints out of band, or certification by an authority. That is the next layer up and is
-not claimed by milestone 1.
+not claimed by the current signer.
 
 ## Direction
 
-Milestone 2 replaces the GP-API software key with a hardware-backed key (Renesas Secure IP)
-behind the same two-command interface — the client, protocol, and this model's interface rows
-are unchanged; only the key-protection rows deepen. Storage freshness (RPMB) and boot
-authentication are separate, independent mechanisms; each moves its row in the table only when
-it has been demonstrated on this board.
+A planned iteration replaces the GP-API software key with a hardware-backed key (Renesas
+Secure IP) behind the same two-command interface — the client, protocol, and this model's
+interface rows are unchanged; only the key-protection rows deepen. Storage freshness (RPMB)
+and boot authentication are separate, independent mechanisms; each moves its row in the table
+only when it has been demonstrated on this board.
