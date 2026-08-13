@@ -15,7 +15,7 @@ appears to work.
 
 ## The device signer
 
-The first application, working end to end on the board since 2026-08-13: one Trusted
+The first application, working end to end on the board: one Trusted
 Application owns one ECDSA P-256 key pair, generated inside the TEE and never exported — the
 interface has no command that returns private material. A caller can read the public key
 (`X||Y`, 64 bytes) or have a SHA-256 digest signed (`r||s`, 64 bytes; the TA does not hash).
@@ -99,12 +99,11 @@ green is not acceptance — the board test is.
 ## Platform notes that shape the design
 
 **Secure DRAM is readable by normal-world root, because this board runs without secure boot.**
-It is a development board in an open lifecycle state (OTP unburned, secure boot not
-provisioned — a deliberate choice on a single board), and in that state the firmware leaves the
-DDR firewall permissive rather than fencing OP-TEE's secure memory. Confirmed on hardware with
+With secure boot not provisioned, the firmware leaves the DDR firewall permissive rather than
+fencing OP-TEE's secure memory, so normal-world root can read it. Confirmed on hardware with
 read-only probes. Consequently, “never exported” describes the TA command *interface*; this
 project does not claim private-key confidentiality against local root. This is a property of the
-board's provisioning, not a flaw in OP-TEE or the platform. See
+board's configuration, not a flaw in OP-TEE or the platform. See
 [`docs/security-model.md`](docs/security-model.md).
 
 **Secure storage on this board provides confidentiality and integrity, but not freshness.**

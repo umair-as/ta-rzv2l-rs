@@ -46,16 +46,14 @@ These are properties of this board's current OP-TEE configuration, stated here s
 above cannot be read as stronger than it is.
 
 - **Secure DRAM is readable by normal-world root, because this board runs without secure boot.**
-  This is a development board in an open lifecycle state: its OTP fuses are unburned and secure
-  boot is not provisioned — a deliberate choice, as it is the only board available. In that
-  state the firmware leaves the DDR firewall (TZC-400) permissive rather than fencing OP-TEE's
-  secure DRAM, so normal-world root can read secure memory directly. Confirmed on hardware
-  (2026-08-13) with read-only probes that returned OP-TEE's own code from its secure region.
-  This is a property of the board's provisioning, not a flaw in OP-TEE or the platform: the same
-  firmware programs the protecting regions once secure boot is provisioned. **Consequence:** key
-  confidentiality against root cannot be claimed on this board — the private scalar sits in
-  readable DRAM while a signing operation runs, so extraction is very likely feasible, though
-  this project has not attempted it.
+  With secure boot not provisioned, the firmware leaves the DDR firewall (TZC-400) permissive
+  rather than fencing OP-TEE's secure DRAM, so normal-world root can read secure memory directly.
+  Confirmed on hardware with read-only probes that returned OP-TEE's own code from its secure
+  region. This is a property of the board's configuration, not a flaw in OP-TEE or the platform:
+  the same firmware programs the protecting regions once secure boot is provisioned.
+  **Consequence:** key confidentiality against root cannot be claimed on this board — the private
+  scalar sits in readable DRAM while a signing operation runs, so extraction is very likely
+  feasible, though this project has not attempted it.
 - **No storage freshness.** Secure storage has confidentiality and integrity but no
   rollback-resistant counter (`CFG_RPMB_FS=n`; the platform port implements no non-volatile
   counter). Root can delete or restore `/var/lib/tee/`. Deletion presents to the TA as a
@@ -63,11 +61,10 @@ above cannot be read as stronger than it is.
   accident, not against a privileged local attacker. Proven on hardware in the predecessor
   project. A fix path exists (RPMB-backed storage) and is deliberately not claimed until it is
   demonstrated.
-- **Secure boot is not provisioned — the shared root cause.** The same open lifecycle state
-  that leaves secure DRAM readable also means the boot ROM verifies nothing, so a determined
-  root attacker could replace the firmware and boot a modified OP-TEE. That is a second,
-  heavier route to the same place the direct DRAM read already reaches. Both close only when
-  secure boot is provisioned, which is out of scope for this project.
+- **Secure boot is not provisioned — the shared root cause.** Without it the boot ROM verifies
+  nothing, so a determined root attacker could also replace the firmware and boot a modified
+  OP-TEE. That is a second, heavier route to the same place the direct DRAM read already reaches.
+  Both close only when secure boot is provisioned, which is out of scope for this project.
 - **No caller authentication.** The TA validates the *format* of every request strictly
   (exact GP parameter layout, exact digest length — enforced and probe-tested), but any
   process that can open the TEE client interface may request a signature. The signing oracle
