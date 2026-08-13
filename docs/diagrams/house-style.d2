@@ -1,0 +1,160 @@
+# Systems Notebook house style for architecture diagrams.
+# Import at the top of every diagram:  ...@house-style
+#
+# Design intent: restrained ink-on-paper base with a small semantic palette.
+# Colour carries meaning (trust, danger, active path), never decoration.
+# Fills are light enough to read as near-white on a light page; strokes carry
+# the weight so shapes stay legible when the SVG is scaled down on mobile.
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 0
+    pad: 24
+    center: true
+  }
+}
+
+classes: {
+  # --- structural -------------------------------------------------------
+
+  # Default component. Use for anything with no special semantics.
+  box: {
+    shape: rectangle
+    style: {
+      stroke: "#3f4a57"
+      stroke-width: 2
+      fill: "#f7f8fa"
+      font-color: "#1c2430"
+      border-radius: 6
+    }
+  }
+
+  # Trust boundary, security domain, or physical enclosure.
+  # Apply to containers, not leaf nodes.
+  boundary: {
+    style: {
+      stroke: "#7b8794"
+      stroke-width: 2
+      stroke-dash: 4
+      fill: "#fbfcfd"
+      font-color: "#4a5563"
+      border-radius: 10
+      double-border: false
+    }
+  }
+
+  # External actor or system outside the design under discussion.
+  external: {
+    shape: rectangle
+    style: {
+      stroke: "#7b8794"
+      stroke-width: 2
+      fill: transparent
+      font-color: "#4a5563"
+      border-radius: 6
+      stroke-dash: 3
+    }
+  }
+
+  # Persistent state: flash, partition, key store, database.
+  store: {
+    shape: cylinder
+    style: {
+      stroke: "#3f4a57"
+      stroke-width: 2
+      fill: "#f7f8fa"
+      font-color: "#1c2430"
+    }
+  }
+
+  # --- semantic ---------------------------------------------------------
+
+  # Verified, signed, measured, or otherwise trusted component.
+  trusted: {
+    style: {
+      stroke: "#2f6f4f"
+      stroke-width: 2
+      fill: "#eef6f1"
+      font-color: "#1e4634"
+      border-radius: 6
+    }
+  }
+
+  # Attack surface, unsigned input, untrusted or unverified component.
+  untrusted: {
+    style: {
+      stroke: "#a3402f"
+      stroke-width: 2
+      fill: "#fbeeec"
+      font-color: "#6d2a1f"
+      border-radius: 6
+    }
+  }
+
+  # The component under discussion — the one the reader should look at first.
+  # Use exactly one per diagram, or none.
+  focus: {
+    style: {
+      stroke: "#b06f1a"
+      stroke-width: 3
+      fill: "#fdf4e6"
+      font-color: "#6b4310"
+      border-radius: 6
+    }
+  }
+
+  # Deferred, planned, or not-yet-implemented. Reads as faded.
+  planned: {
+    style: {
+      stroke: "#9aa3ad"
+      stroke-width: 2
+      stroke-dash: 3
+      fill: transparent
+      font-color: "#7b8794"
+      border-radius: 6
+      opacity: 0.85
+    }
+  }
+
+  # --- connections ------------------------------------------------------
+
+  # Default edge. Applied automatically is not possible in D2, so apply
+  # explicitly to edges that need to match the base weight.
+  flow: {
+    style: {
+      stroke: "#3f4a57"
+      stroke-width: 2
+      font-color: "#4a5563"
+    }
+  }
+
+  # Secondary or optional path: fallback, retry, error return.
+  aside: {
+    style: {
+      stroke: "#7b8794"
+      stroke-width: 2
+      stroke-dash: 4
+      font-color: "#7b8794"
+    }
+  }
+
+  # Verification, signature check, or measurement relationship.
+  verify: {
+    style: {
+      stroke: "#2f6f4f"
+      stroke-width: 2
+      font-color: "#1e4634"
+    }
+  }
+
+  # A path that is blocked, rejected, or fails.
+  blocked: {
+    style: {
+      stroke: "#a3402f"
+      stroke-width: 2
+      stroke-dash: 3
+      font-color: "#6d2a1f"
+    }
+  }
+}

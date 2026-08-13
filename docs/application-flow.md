@@ -6,20 +6,9 @@ application.
 
 ## The three environments
 
-```text
-Development computer
-  cross-compiles, deploys, drives tests, verifies signatures independently
-           |
-           | SSH / SCP
-           v
-RZ/V2L normal world (Linux / REE)
-  signer-client -> libteec -> OP-TEE kernel driver
-           |
-           | open session by TA UUID, invoke command
-           v
-RZ/V2L secure world (OP-TEE)
-  signer TA -> GP Internal Core API -> secure storage and P-256 operations
-```
+![Two TrustZone worlds on the RZ/V2L, driven from a development computer: signer-client in the
+normal world invokes the signer TA in the secure world, whose key ciphertext is sealed back
+into normal-world storage.](diagrams/architecture.svg)
 
 The development computer is outside the TEE. It builds both board programs and runs the final
 signature verifier.
@@ -167,18 +156,16 @@ signer-client pubkey
 
 ### Signing a digest
 
-```text
-signer-client sign <64 hex characters>
-  -> parse exactly 32 bytes
-  -> TEEC_OpenSession(signer UUID)
-  -> InvokeCommand(Sign, digest input, 64-byte signature output)
-  -> TA loads the key and performs ECDSA P-256/SHA-256
-  -> TA returns r || s
-  -> client also fetches the public key and prints one JSON object
-```
+![Sequence of a sign request: the development host asks signer-client to sign a digest, the
+client opens a session and invokes the Sign command through OP-TEE, the TA loads its key and
+computes an ECDSA P-256 signature, and the client returns a JSON object the host verifies
+independently.](diagrams/sign-sequence.svg)
 
-The TA signs a caller-supplied SHA-256 **digest**. It does not hash an arbitrary message. `r` and
-`s` are each 32-byte, big-endian integers, so the raw signature is 64 bytes rather than ASN.1 DER.
+The client parses exactly 32 bytes, invokes `Sign`, and also fetches the public key so it can
+print one self-contained JSON object. The TA signs a caller-supplied SHA-256 **digest** — it
+does not hash an arbitrary message. `r` and `s` are each 32-byte, big-endian integers, so the
+raw signature is 64 bytes rather than ASN.1 DER, and the private key never returns to the
+normal world.
 
 ## Build and deploy flow
 

@@ -1,0 +1,22 @@
+...@house-style
+shape: sequence_diagram
+
+# A `sign` request, end to end. The private key never crosses back to the
+# normal world; only the public key and the r||s signature do, and the
+# development host verifies them with an independent crypto library.
+
+dev: Development host
+client: signer-client
+tee: OP-TEE
+ta: signer TA
+
+dev -> client: sign <64-hex digest>
+client -> tee: OpenSession(UUID)
+tee -> ta: load + open session
+client -> tee: InvokeCommand(Sign, digest in, 64 B out)
+tee -> ta: dispatch
+ta -> ta: load key from secure storage
+ta -> ta: ECDSA P-256 over the digest
+ta -> client: r || s
+client -> dev: JSON — pubkey, digest, signature
+dev -> dev: verify.py — independent check

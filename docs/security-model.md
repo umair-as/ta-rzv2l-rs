@@ -7,7 +7,14 @@ no more. This document will grow as mechanisms land; it is not a compliance arti
 ## The claim, precisely
 
 > The RZ/V2L TEE holds a persistent ECDSA P-256 private key and produces valid signatures over
-> caller-supplied SHA-256 digests, without exposing the private key to normal-world Linux.
+> caller-supplied SHA-256 digests, without exposing the private key *through its interface* to
+> normal-world Linux.
+
+The qualifier is load-bearing: no command returns private material, and an unprivileged
+attacker cannot reach it. But on this board's current configuration key confidentiality
+against a **root** attacker can no longer be claimed — root can read secure-world DRAM directly
+(see "Secure DRAM is not isolated" below) — so this is a demonstration of the signing primitive
+and its interface discipline, not a claim of key secrecy against local root.
 
 Evidence: the board smoke test (`tests/board-smoke.sh`), whose fourteen checks include
 independent host-side verification with a different crypto library, a tampered-digest rejection,
@@ -29,8 +36,8 @@ success and error paths.
 | Remote, no code on device | No | No |
 | Local unprivileged process, no TEE access | No | No |
 | Local process with TEE client access | No | **Misuse: yes** — can request signatures over arbitrary digests |
-| Normal-world root | No, not via any software-only read path demonstrated here | **Destroy: yes** — can delete `/var/lib/tee/`, forcing a new identity; can also roll storage back |
-| Root, determined, firmware-level | **Ultimately yes** on this board's current configuration (see below) | Yes |
+| Normal-world root | **Confidentiality broken.** Root can read secure DRAM directly — demonstrated for OP-TEE code, no firmware step (see below). The private scalar sits in that same readable DRAM during a signing call, so extraction is very likely feasible; this project has not attempted it | **Destroy: yes** — can delete `/var/lib/tee/`, forcing a new identity; can also roll storage back |
+| Root, determined, firmware-level | Yes (also available, via the firmware path below) | Yes |
 | Physical attacker | Out of scope — a TEE offers no tamper resistance | Yes |
 
 ## Platform limitations that bound the claims
@@ -38,6 +45,34 @@ success and error paths.
 These are properties of this board's current OP-TEE configuration, stated here so the table
 above cannot be read as stronger than it is.
 
+- **Secure DRAM is not isolated from the normal world.** The core TEE guarantee — that Linux
+  cannot read secure-world memory — does not hold on this board. Demonstrated on hardware
+  (2026-08-13): as root, three consecutive reads
+
+  ```sh
+  devmem2 0x44100000 w   # -> 0xAA0003F3
+  devmem2 0x44100004 w   # -> 0xAA0103F4
+  devmem2 0x44100008 w   # -> 0xAA0203F5
+  ```
+
+  returned a valid AArch64 instruction sequence (`mov x19,x0` / `mov x20,x1` / `mov x21,x2`) —
+  OP-TEE's own code, read cleanly with no bus fault — while a `STRICT_DEVMEM` control at the
+  first System-RAM address (`0x48000000`) was correctly refused. The read addresses fall inside
+  OP-TEE's TZDRAM. The firmware memory map is:
+
+  | Region | Range |
+  |---|---|
+  | TF-A | `0x43f00000`–`0x440fffff` |
+  | OP-TEE TZDRAM | `0x44100000`–`0x47dfffff` |
+  | Linux System RAM | from `0x48000000` |
+
+  TF-A brings up TZC-400 with a permissive region 0 but adds no secure-only DDR regions — the
+  region that would fence TZDRAM is compiled only under `TRUSTED_BOARD_BOOT`, which is off here
+  — so the DDR firewall leaves secure DRAM open to normal-world reads. **Consequence:** key
+  confidentiality against root can no longer be claimed. The private scalar is in this readable
+  DRAM while a signing operation runs, so extracting it is very likely feasible; this project
+  has not attempted it, and it did not need the firmware path below. The fix is a TF-A/TZC
+  change in the BSP, outside this repo.
 - **No storage freshness.** Secure storage has confidentiality and integrity but no
   rollback-resistant counter (`CFG_RPMB_FS=n`; the platform port implements no non-volatile
   counter). Root can delete or restore `/var/lib/tee/`. Deletion presents to the TA as a
@@ -48,8 +83,8 @@ above cannot be read as stronger than it is.
 - **Secure boot is not fused.** The boot ROM verifies nothing on this development board, and
   the Renesas OP-TEE fork ships a normal-world-reachable flash-write primitive. A determined
   root attacker could therefore replace the firmware, boot a modified OP-TEE, and read
-  secure storage — key **theft**, not just deletion. This is why the root row above says
-  "no software-only read path *demonstrated here*" rather than "impossible".
+  secure storage — key **theft**, not just deletion. On this board this is a second, heavier
+  path to the same result the direct DRAM read above already gives.
 - **No caller authentication.** The TA validates the *format* of every request strictly
   (exact GP parameter layout, exact digest length — enforced and probe-tested), but any
   process that can open the TEE client interface may request a signature. The signing oracle

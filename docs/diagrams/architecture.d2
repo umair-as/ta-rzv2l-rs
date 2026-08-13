@@ -1,0 +1,34 @@
+...@house-style
+direction: right
+
+# Two TrustZone worlds on one board, driven from a third machine. The focus is
+# the signer TA: the only place the private key exists in plaintext. The key's
+# ciphertext at rest lives in the normal world (store), which is why this board
+# offers confidentiality but not isolation against local root — see
+# docs/security-model.md.
+
+dev: Development computer {class: external}
+
+board: RZ/V2L board {
+  class: boundary
+  direction: right
+
+  normal: Normal world (Linux / REE) {
+    class: boundary
+    direction: down
+    client: signer-client {class: box}
+    store: |md
+      /var/lib/tee
+      encrypted key blob
+    | {class: store}
+  }
+
+  secure: Secure world (OP-TEE) {
+    class: boundary
+    ta: signer TA {class: focus}
+  }
+}
+
+dev -> board.normal.client: deploy + drive over ssh {class: flow}
+board.normal.client -> board.secure.ta: invoke — pubkey + signature return {class: flow}
+board.secure.ta -> board.normal.store: seal key via tee-supplicant {class: flow}
